@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 機器人即時定位監控</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header { width: 100%; max-width: 800px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        #status { padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; background: #ff4d4f; color: white; }
+        #map-container { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 0; width: fit-content; overflow: hidden; }
+        #map-canvas { display: block; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; width: 100%; max-width: 800px; }
+        .info-card { background: white; border-radius: 8px; padding: 8px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .info-label { font-size: 11px; color: #888; }
+        .info-value { font-size: 18px; font-weight: bold; color: #333; margin-top: 2px; }
+        .task-list { margin-top: 8px; width: 100%; max-width: 800px; font-size: 12px; color: #666; }
+        .task-list span { display: inline-block; margin: 2px 8px 2px 0; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h2 style="margin:0">🤖 機器人即時定位監控</h2>
+    <div id="status">⏳ 載入中...</div>
+</div>
+<div id="map-container">
+    <canvas id="map-canvas"></canvas>
+</div>
+<div class="info-grid">
+    <div class="info-card"><div class="info-label">位置 X</div><div class="info-value" id="pos-x">--</div></div>
+    <div class="info-card"><div class="info-label">位置 Y</div><div class="info-value" id="pos-y">--</div></div>
+    <div class="info-card"><div class="info-label">朝向</div><div class="info-value" id="pos-yaw">--</div></div>
+</div>
+<div class="task-list" id="task-list"></div>
+
+<script>
+const canvas = document.getElementById('map-canvas');
+const ctx = canvas.getContext('2d');
+const statusDiv = document.getElementById('status');
+const posX = document.getElementById('pos-x');
+const posY = document.getElementById('pos-y');
+const posYaw = document.getElementById('pos-yaw');
+
+const MAP = { resolution: 0.05, originX: 0, originY: 0, w: 100, h: 100 };
+let TASK_POINTS = [];
+let mapImageData = null;  // 快取的地圖像素數據
+
+function worldToCanvas(wx, wy) {
+    return {
+        x: (wx - MAP.originX) / MAP.resolution,
+        y: MAP.h - (wy - MAP.originY) / MAP.resolution
+    };
+}
+
+// 解析 PGM (P5 raw binary grayscale)
+function parsePGM(buffer) {
+    const view = new Uint8Array(buffer);
+    let offset = 0;
+    // 跳過 magic number
+    while (view[offset] !== 0x0a) offset++; offset++;
+    // 跳過註釋行
+    while (view[offset] === 0x23) { while (view[offset] !== 0x0a) offset++; offset++; }
+    // 讀寬度
+    let w = 0;
+    while (view[offset] >= 0x30 && view[offset] <= 0x39) { w = w * 10 + (view[offset] - 0x30); offset++; }
+    offset++; // skip space/newline
+    // 讀高度
+    let h = 0;
+    while (view[offset] >= 0x30 && view[offset] <= 0x39) { h = h * 10 + (view[offset] - 0x30); offset++; }
+    offset++; // skip newline
+    // 讀 maxval
+    let maxval = 0;
+    while (view[offset] >= 0x30 && view[offset] <= 0x39) { maxval = maxval * 10 + (view[offset] - 0x30); offset++; }
+    offset++; // skip newline
+
+    // 像素數據
+    const pixels = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const v = view[offset++];
+            const idx = (y * w + x) * 4;
+            const inv = 255 - v; // PGM: 0=black(occupied)→white, 255=white(free)→black
+            pixels[idx] = inv;
+            pixels[idx+1] = inv;
+            pixels[idx+2] = inv;
+            pixels[idx+3] = 255;
+        }
+    }
+    return { width: w, height: h, data: pixels };
+}
+
+// 解析簡易 YAML
+function parseYAML(text) {
+    const m = {};
+    text.split('\n').forEach(line => {
+        const match = line.match(/^(\w+):\s*(.+)/);
+        if (match) {
+            let val = match[2].trim();
+            if (val.startsWith('[')) {
+                val = JSON.parse(val.replace(/'/g, '"'));
+            } else if (!isNaN(val) && val !== '') {
+                val = parseFloat(val);
+            }
+            m[match[1]] = val;
+        }
+    });
+    return m;
+}
+
+async function loadMap() {
+    try {
+        // 計算 map 目錄的相對路徑
+        // 當透過 file:///home/unitree/lab/all/index.html 開啟時，
+        // 用 ../map/ 指向 /home/unitree/lab/map/
+        // 當透過 HTTP server 時，用 map/ （假設 server 根目錄下也有 map/）
+        const isFile = location.protocol === 'file:';
+        const base = isFile ? '../map/' : 'map/';
+
+        // 讀取 YAML 獲取地圖元數據
+        const yamlResp = await fetch(base + 'map0721.yaml?' + Date.now());
+        const yamlText = await yamlResp.text();
+        const yamlData = parseYAML(yamlText);
+
+        MAP.resolution = yamlData.resolution || 0.05;
+        MAP.originX = (Array.isArray(yamlData.origin) ? yamlData.origin[0] : yamlData.origin?.x) || 0;
+        MAP.originY = (Array.isArray(yamlData.origin) ? yamlData.origin[1] : yamlData.origin?.y) || 0;
+
+        // 讀取 PGM 二進制數據
+        const pgmResp = await fetch(base + 'map0721.pgm?' + Date.now());
+        const pgmBuf = await pgmResp.arrayBuffer();
+        const pgm = parsePGM(pgmBuf);
+
+        MAP.w = pgm.width;
+        MAP.h = pgm.height;
+
+        // 建立離屏 ImageData 快取
+        const offscreen = new OffscreenCanvas
+            ? new OffscreenCanvas(MAP.w, MAP.h)
+            : document.createElement('canvas');
+        offscreen.width = MAP.w;
+        offscreen.height = MAP.h;
+        const offCtx = offscreen.getContext('2d');
+        mapImageData = new ImageData(pgm.data, MAP.w, MAP.h);
+
+        // 設定畫布（SCALE=2 提高解析度）
+        canvas.width = MAP.w * 2;
+        canvas.height = MAP.h * 2;
+        ctx.setTransform(2, 0, 0, 2, 0, 0);
+
+        // 載入任務點
+        try {
+            const tResp = await fetch(base + 'map0721_task.json?' + Date.now());
+            const tData = await tResp.json();
+            TASK_POINTS = (tData.points || []).map((p, i) => ({
+                name: p.tts_text || p.comment || '點 ' + i,
+                x: p.x, y: p.y,
+                color: ['#1890ff','#52c41a','#fa8c16','#722ed1','#eb2f96'][i % 5]
+            }));
+        } catch(e) { TASK_POINTS = []; }
+
+        // 首次繪製
+        _drawMap();
+
+        statusDiv.textContent = '✅ map0721 (' + MAP.w + '×' + MAP.h + ')';
+        statusDiv.style.background = '#52c41a';
+
+        const tl = document.getElementById('task-list');
+        tl.innerHTML = TASK_POINTS.map(pt =>
+            '<span>📍 <b>' + (pt.name.length > 20 ? pt.name.slice(0, 20) + '…' : pt.name) + '</b> (' + pt.x.toFixed(2) + ', ' + pt.y.toFixed(2) + ')</span>'
+        ).join('');
+
+    } catch(e) {
+        statusDiv.textContent = '⚠️ 載入失敗: ' + e.message;
+        statusDiv.style.background = '#fa8c16';
+        console.error(e);
+    }
+}
+
+// 繪製地圖底圖 + 任務點
+function _drawMap() {
+    try {
+        ctx.clearRect(0, 0, MAP.w, MAP.h);
+        // 用快取像素繪製地圖
+        if (mapImageData) {
+            ctx.putImageData(mapImageData, 0, 0);
+        }
+        TASK_POINTS.forEach(pt => {
+            const p = worldToCanvas(pt.x, pt.y);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = pt.color;
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+            ctx.fillStyle = '#333';
+            ctx.font = '2.5px sans-serif';
+            ctx.fillText(pt.name.length > 15 ? pt.name.slice(0,15)+'…' : pt.name, p.x + 3, p.y - 1);
+        });
+    } catch(e) {
+        statusDiv.textContent = '⚠️ 繪製失敗: ' + e.message;
+        statusDiv.style.background = '#fa8c16';
+    }
+}
+
+async function fetchPose() {
+    try {
+        const resp = await fetch('robot_pose.json?' + Date.now());
+        const d = await resp.json();
+        const x = parseFloat(d.x) || 0, y = parseFloat(d.y) || 0;
+        const qx = parseFloat(d.q_x) || 0, qy = parseFloat(d.q_y) || 0;
+        const qz = parseFloat(d.q_z) || 0, qw = parseFloat(d.q_w) || 1;
+        const yaw = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz)) * 180 / Math.PI;
+
+        _drawMap();
+
+        const p = worldToCanvas(x, y);
+        const ang = yaw * Math.PI / 180;
+
+        // 機器人箭頭
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(-ang + Math.PI / 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -8); ctx.lineTo(6, 6); ctx.lineTo(-6, 6); ctx.closePath();
+        ctx.fillStyle = '#ff4d4f'; ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.restore();
+
+        // 前方方向點
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(ang) * 10, p.y - Math.sin(ang) * 10, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff4d4f'; ctx.fill();
+
+        posX.textContent = x.toFixed(3) + ' m';
+        posY.textContent = y.toFixed(3) + ' m';
+        posYaw.textContent = yaw.toFixed(1) + '°';
+    } catch(e) { /* no data yet */ }
+}
+
+loadMap();
+setInterval(fetchPose, 200);
+fetchPose();
+</script>
+</body>
+</html>

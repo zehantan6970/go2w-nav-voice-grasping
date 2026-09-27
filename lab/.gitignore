@@ -1,0 +1,11 @@
+# 忽略 Python 編譯快取
+__pycache__/
+*.pyc
+
+# 忽略大型環境安裝檔
+Miniconda3-latest-Linux-x86_64.sh
+Miniforge3-Linux-aarch64.sh
+
+# 忽略大型模型檔案
+*.engine
+*.onnx

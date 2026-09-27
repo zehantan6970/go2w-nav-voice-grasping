@@ -1,0 +1,11 @@
+dashscope>=1.25.17
+pyaudio
+numpy
+python-dotenv
+sounddevice
+opencv-python
+aiohttp
+websocket-client
+aiortc
+dotenv
+dashscope

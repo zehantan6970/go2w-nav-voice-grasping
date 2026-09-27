@@ -1,0 +1,7 @@
+lidar_topic: "rt/rslidar_points"
+high_intensity_topic: "rt/high_intensity"
+
+chargingWidth: 0.40
+chargingLength: 0.40
+intensity_threshold: 150
+dis_chargePt2Center: 0.38

@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 語音助手 — Voice Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --sidebar-bg: rgba(20, 20, 20, 0.8);
+            --accent-color: #3e7bfa;
+            --text-main: #ffffff;
+            --text-dim: #a0a0a0;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            padding: 20px;
+        }
+
+        select {
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            outline: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        select option {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+
+        button {
+            cursor: pointer;
+            transition: 0.2s;
+            border-radius: 6px;
+            border: none;
+            padding: 8px 16px;
+        }
+        button:hover { opacity: 0.8; }
+
+        input {
+            outline: none;
+        }
+
+        .primary { background: #1f6feb; color: #fff; }
+        .success { background: #238636; color: #fff; }
+        .danger { background: #da3633; color: #fff; }
+
+        .hidden { display: none !important; }
+
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 500; display: inline-block; }
+        .badge-ok { background: #238636; color: #fff; }
+        .badge-err { background: #da3633; color: #fff; }
+        .badge-warn { background: #9e6a03; color: #fff; }
+        .badge-info { background: #1f6feb; color: #fff; }
+        .badge-idle { background: rgba(255,255,255,0.1); color: #ccc; }
+
+        .msg { max-width: 90%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; word-break: break-word; margin-bottom: 6px; animation: aiFadeIn .2s; }
+        @keyframes aiFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        .msg.user { align-self: flex-end; background: #1f6feb; color: #fff; border-bottom-right-radius: 4px; }
+        .msg.ai { align-self: flex-start; background: rgba(255,255,255,0.04); border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.08); }
+        .msg.sys { align-self: center; color: #888; font-size: 11px; background: transparent; padding: 4px; }
+        .msg .label { font-size: 11px; margin-bottom: 2px; opacity: .6; }
+        .msg.ai .label { color: #58a6ff; opacity: 1; }
+        .msg .streaming { font-style: italic; opacity: .7; }
+
+        .mic-btn { width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; color: #fff; position: relative; padding: 0; }
+        .mic-btn.active { background: #1f6feb; border-color: #58a6ff; box-shadow: 0 0 15px rgba(88,166,255,.3); }
+        .mic-btn.active::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #58a6ff; animation: aiPulse 1.5s infinite; }
+        @keyframes aiPulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(1.4); opacity: 0; } }
+
+        .state-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+        .state-dot.idle { background: #888; }
+        .state-dot.listening { background: #3fb950; }
+        .state-dot.thinking { background: #d29922; animation: aiBlink 1s infinite; }
+        .state-dot.responding { background: #bc8cff; animation: aiBlink .6s infinite; }
+        .state-dot.disconnected { background: #f85149; }
+        @keyframes aiBlink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+        .wizard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: aiFadeIn .3s; }
+        .wizard-overlay.hidden { display: none; }
+        .wizard { background: #161b22; border: 1px solid #30363d; border-radius: 16px; width: 480px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 20px; color: #e6edf3; box-shadow: 0 16px 48px rgba(0,0,0,.4); }
+        .wizard h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; color: #fff; }
+        .dev-section { background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+        .dev-section h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #fff; }
+        .meter-bar { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        .meter-bar .fill { height: 100%; background: #3fb950; width: 0%; }
+        .wizard-cam video { width: 100%; max-height: 140px; object-fit: contain; }
+        .mode-toggle { display: flex; gap: 8px; margin-top: 8px; }
+        .mode-card { flex: 1; padding: 10px; border: 2px solid #30363d; border-radius: 8px; cursor: pointer; font-size: 11px; }
+        .mode-card.selected { border-color: #58a6ff; background: rgba(88,166,255,0.08); }
+
+        .wake-toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.8); z-index: 11000; padding: 15px 30px; border-radius: 12px; font-size: 20px; font-weight: 700; pointer-events: none; opacity: 0; transition: all 0.3s ease; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+        .wake-toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+        .wake-toast.wake { background: linear-gradient(135deg,#238636,#2ea043); color: #fff; }
+        .wake-toast.sleep { background: linear-gradient(135deg,#9e6a03,#d29922); color: #fff; }
+
+        .cam-box { position: relative; background: #000; border-radius: 8px; overflow: hidden; display: none; max-height: 160px; width: 100%; }
+        .cam-box video { width: 100%; height: auto; max-height: 160px; object-fit: contain; }
+
+        .ai-status-row { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; margin-bottom: 10px; color: var(--text-dim); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .ai-ctrl { border-top: 1px solid var(--border-color); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; background: transparent; }
+        .input-row { display: flex; gap: 6px; }
+        .input-row input { flex: 1; background: #1a1a1a; border: 1px solid #333; color: white; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+        .btn-row { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-start; }
+        .btn-row button { font-size: 11px; padding: 4px 8px; background: rgba(255,255,255,0.05); color: #fff; }
+        .mic-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .ai-footer-info { font-size: 10px; color: #666; display: flex; justify-content: space-between; margin-top: 2px; }
+
+        .viz { height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+        .bar { height: 100%; background: #3fb950; width: 0%; }
+
+        #chat-window {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        #chat {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        #wiz-mic-sel, #wiz-spk-sel {
+            width: 250px;
+            max-width: 250px;
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-window">
+        <h3 style="margin-top: 0; margin-bottom: 10px; color: var(--text-dim);">AI 助手</h3>
+
+        <div class="ai-status-row">
+            <span id="srv-badge" class="badge badge-idle">后端未连接</span>
+            <span id="api-badge" class="badge badge-idle">百炼未连接</span>
+            <span id="wake-badge" class="badge badge-warn" title='请说"小创小创, 开始对话"喚醒' style="cursor:pointer" onclick="setDialogActive(!isDialogActive)">待喚醒</span>
+            <span>轮次:<b id="rounds">0</b></span>
+            <span>会话:<b id="did">-</b></span>
+            <span id="session-info"></span>
+            <span id="mode-indicator" class="badge badge-info" title="对话模式" style="cursor:pointer" onclick="showWizard()">全双工</span>
+            <button onclick="showWizard()" style="font-size: 10px; padding: 2px 6px; background: rgba(255,255,255,0.05); color: #fff; border-radius: 4px;">设备设置</button>
+        </div>
+
+        <div id="chat">
+            <p style="color: #555; font-size: 14px;" id="wait-msg">等待輸入...</p>
+        </div>
+
+        <div class="ai-ctrl">
+            <div class="viz">
+                <div class="bar" id="viz-bar"></div>
+            </div>
+
+            <div class="cam-box" id="cam-box">
+                <video id="cam-video" autoplay playsinline muted style="width: 100%; height: auto; max-height: 160px; object-fit: contain;"></video>
+                <div class="cam-label" style="position: absolute; top: 4px; left: 8px; font-size: 10px; color: #fff; background: rgba(0,0,0,.5); padding: 2px 6px; border-radius: 4px;"><span class="cam-dot"></span>浏览器本地 LIVE</div>
+            </div>
+
+            <div class="cam-box" id="dog-cam-container" style="border: 1px solid rgba(63, 185, 80, 0.3);">
+                <img id="dog-cam-stream" src="" style="width: 100%; height: auto; max-height: 160px; object-fit: contain;" />
+                <div class="cam-label" style="position: absolute; top: 4px; left: 8px; font-size: 10px; color: #fff; background: rgba(35, 134, 54, 0.8); padding: 2px 6px; border-radius: 4px;">
+                    <span class="cam-dot" style="background: #3fb950; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; animation: blink 1s infinite;"></span>狗子硬件 LIVE
+                </div>
+            </div>
+
+            <div class="mic-row">
+                <div class="state-info" style="font-size: 12px; min-width: 75px;">
+                    <span class="state-dot idle" id="dot"></span>
+                    <span class="state-text" id="state-txt" style="color: var(--text-dim);">IDLE</span>
+                </div>
+
+                <button class="mic-btn" id="mic-btn" title="切換麦克风">
+                    <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" stroke-width="2"/><line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" stroke-width="2"/></svg>
+                </button>
+
+                <select id="mic-sel" style="flex: 1; font-size: 12px; padding: 4px 8px; max-width: 130px;"><option>正在检测...</option></select>
+                <button onclick="refreshMics()" style="font-size: 11px; padding: 4px 8px; background: rgba(255,255,255,0.05); color: #fff;">刷新</button>
+            </div>
+
+            <div class="input-row">
+                <input type="text" id="txt-in" placeholder="输入文字..." onkeydown="if(event.key==='Enter')sendTxt()">
+                <button onclick="sendTxt()" class="primary" style="font-size: 12px; padding: 6px 12px;">发送</button>
+            </div>
+
+            <div class="btn-row">
+                <button onclick="toggleCam()" id="cam-btn">摄像头</button>
+                <button onclick="doVQA()">拍照</button>
+                <button onclick="doInterrupt()">打断</button>
+                <button onclick="doReconnect()">重连</button>
+                <button onclick="clearChat()">清空</button>
+            </div>
+
+            <div class="ai-footer-info">
+                <span>WS: <span id="ws-st">未连接</span></span>
+                <span>↑:<b id="s-up">0</b> Chunks | ↓:<b id="s-dn">0</b> Chunks</span>
+                <span>会话目录: <b id="s-dir">-</b></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 喚醒詞全螢幕提示 -->
+    <div class="wake-toast" id="wake-toast"></div>
+
+    <!-- ═══════ 設備設置向導 ═══════ -->
+    <div class="wizard-overlay" id="wizard-overlay">
+    <div class="wizard">
+    <div class="wizard-header" style="margin-bottom: 15px;">
+        <h2>设备设置</h2>
+        <p style="font-size:12px; color:#8b949e;">请选择並测试你的麦克风、喇叭和摄像头</p>
+    </div>
+    <div class="wizard-body">
+        <div class="dev-section">
+        <h3>麦克风</h3>
+        <div style="display:flex; gap:6px; margin-bottom:6px;">
+            <select id="wiz-mic-sel"><option>正在检测...</option></select>
+            <button onclick="wizRefreshMics()" style="font-size:11px;">刷新</button>
+            <button onclick="wizTestMic()" class="primary" id="wiz-mic-btn">测试</button>
+        </div>
+        <div class="meter-bar"><div class="fill" id="wiz-mic-meter"></div></div>
+        <div class="dev-status" id="wiz-mic-status" style="font-size:11px; color:#8b949e; margin-top:4px;">请点击"测试"</div>
+        </div>
+        <div class="dev-section">
+        <h3>喇叭/耳机</h3>
+        <div style="display:flex; gap:6px;">
+            <select id="wiz-spk-sel"><option>正在检测...</option></select>
+            <button onclick="wizRefreshSpks()" style="font-size:11px;">刷新</button>
+            <button onclick="wizTestSpeaker()" class="primary" id="wiz-spk-btn">播放测试音</button>
+        </div>
+        <div class="dev-status" id="wiz-spk-status" style="font-size:11px; color:#8b949e; margin-top:4px;">请点击测试音</div>
+        </div>
+        <div class="dev-section">
+        <h3>摄像头</h3>
+        <div style="display:flex; gap:6px;">
+            <select id="wiz-cam-sel"><option>正在检测...</option></select>
+            <button onclick="wizRefreshCams()" style="font-size:11px;">刷新</button>
+            <button onclick="wizTestCam()" class="primary" id="wiz-cam-btn">预览</button>
+        </div>
+        <div class="wizard-cam" id="wiz-cam-box" style="margin-top:6px; display:none; background:#000; border-radius:6px; overflow:hidden; text-align:center;"><img id="wiz-cam-video" src="" style="width: 100%; height: auto; max-height: 150px; object-fit: contain;" /></div>
+        <div class="dev-status" id="wiz-cam-status" style="font-size:11px; color:#8b949e; margin-top:4px;">可选功能</div>
+        </div>
+        <div class="dev-section">
+        <h3>对话模式</h3>
+        <div class="mode-toggle">
+            <div class="mode-card selected" id="mode-duplex" onclick="selectDialogMode('duplex')">
+            <h4>全双工 Full Duplex</h4>
+                <p>像打真实电话 — 你可以随时插嘴打断AI，AI通过实时VAD自动检测你的声音并响应。体验最自然，适合流畅对话。</p>
+            </div>
+            <div class="mode-card" id="mode-push2talk" onclick="selectDialogMode('push2talk')">
+            <h4>半双工 Push-to-Talk</h4>
+                <p>像用对讲机 — 必须轮流发言。AI说话时需点击"打断"按钮或等它说完才能说话。适合嘈杂环境，避免误触发。</p>
+            </div>
+        </div>
+        </div>
+        <div class="dev-section">
+          <h3><span class="icon">&#x1f3b5;</span> AI声音 <span style="font-weight:400;font-size:12px;">(TTS语音合成声音)</span></h3>
+          <div class="dev-row-wizard">
+            <select id="wiz-voice-sel"><option value="app_default">使用UUMO应用配置 (推荐)</option></select>
+          </div>
+          <div class="dev-status" id="wiz-voice-status">当前声音: 使用UUMO应用配置 — 应用中的角色名/声音/RAG知识库将自动生效</div>
+        </div>
+        <div class="dev-section">
+          <h3><span class="icon">&#x1f50c;</span> 百炼连接测试 <span style="font-weight:400;font-size:12px;">(验证API+TTS+喇叭)</span></h3>
+          <div class="dev-row-wizard">
+            <button onclick="wizTestBailian()" class="primary" id="wiz-test-bailian-btn">测试百炼连接</button>
+          </div>
+          <div class="dev-status" id="wiz-bailian-status">点击按钮将连接百炼API并播放TTS测试音(播报12345)，验证声音配置是否正确</div>
+        </div>
+    </div>
+    <div class="wizard-footer" style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
+        <span class="hint" id="wiz-hint" style="font-size:11px; color:#8b949e;">完成配置后点击开始</span>
+        <div class="actions" style="display:flex; gap:6px;">
+        <button onclick="wizSkip()">跳过</button>
+        <button onclick="wizStart()" class="success" style="background:#238636; color:#fff;">开始对话</button>
+        </div>
+    </div>
+    </div>
+    </div>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════
+    //  全局状态
+    // ═══════════════════════════════════════════════════════════
+    let audioCtx = null;
+    let micStream = null;
+    let micSource = null;
+    let scriptNode = null;
+    let micOn = false;
+    let state = 'IDLE';
+    let downRate = 48000;
+    let isPlaying = false;
+    let nextPlayTime = 0;
+    let lastTTSSource = null;
+    let activeSources = [];
+    let upChunks = 0;
+    let dnChunks = 0;
+    let logScroll = true;
+    let curAsr = null;
+    let curLlm = null;
+    let camStream = null;
+    let camOn = false;
+    let dogCamOn = false;
+    let audioFirstSent = false;
+    let audioLogCounter = 0;
+    let skippedAudioCount = 0;
+    let lastAutoVqaTime = 0;
+    let clientInterruptActive = false;
+    let pendingVQA = false;
+    let ttsRespondingStartTime = 0;
+    let speechAboveCount = 0;
+    let lastUserMsgElement = null;
+
+    // ─── 唤醒词控制 ───
+    let isDialogActive = false;
+    let _dormantHintShown = false;
+
+    // 选中的设备 ID
+    let selectedMicId = '';
+    let selectedSpkId = '';
+    let selectedCamId = '';
+
+    // 对话模式
+    let dialogMode = 'duplex';
+
+    // AI声音选择
+    let selectedVoice = 'app_default';
+
+    // WebSocket
+    let ws = null;
+
+    // BACKEND_URL for camera streams
+    const BACKEND_URL = `http://${location.hostname}:5000`;
+
+    // ═══════════════════════════════════════════════════════════
+    //  日志
+    // ═══════════════════════════════════════════════════════════
+    function log(text, lvl='info') {
+        console.log(`%c[${lvl.toUpperCase()}] ${text}`, `color: ${lvl==='error'?'#f85149':lvl==='warn'?'#d29922':'#58a6ff'}`);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  对话消息
+    // ═══════════════════════════════════════════════════════════
+    function chat(text, role, streaming=false) {
+        const area = document.getElementById('chat');
+        const div = document.createElement('div');
+        div.className = 'msg ' + role;
+        if (role !== 'sys') {
+            const lbl = document.createElement('div');
+            lbl.className = 'label';
+            lbl.textContent = role === 'user' ? '你' : 'AI';
+            div.appendChild(lbl);
+        }
+        const c = document.createElement('div');
+        if (streaming) { c.className = 'streaming'; }
+        c.textContent = text;
+        div.appendChild(c);
+        area.appendChild(div);
+        area.scrollTop = area.scrollHeight;
+        return c;
+    }
+
+    function clearChat() {
+        document.getElementById('chat').innerHTML = '';
+        curAsr = null; curLlm = null;
+    }
+
+    function safeSetText(id, value, fallback = '') {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = value || fallback;
+        } else {
+            console.warn(`[UI Warning] 页面缺少元素 ID: ${id}，无法设置值: ${value}`);
+        }
+    }
+
+    function sendTestCommand(type, deviceId) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: "test_device",
+                device_type: type,
+                device_id: deviceId
+            }));
+            console.log(`[向导] 发送测试指令: ${type}, ID: ${deviceId}`);
+        } else {
+            alert("WebSocket 未连接，无法测试硬件！");
+        }
+    }
+
+    // ────── 麦克风列表 ───────
+    function wizRefreshMics() {
+        const statusEl = document.getElementById('wiz-mic-status');
+        if (!statusEl) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'get_robot_audio_devices',
+                mode: 'input'
+            }));
+            statusEl.textContent = "正在获取机器狗麦克风列表...";
+            statusEl.className = 'dev-status processing';
+            log('[向导] 已发送获取机器狗麦克风请求，等待狗子回应...', 'info');
+        } else {
+            statusEl.textContent = "后端未连接，无法获取机器狗麦克风";
+            statusEl.className = 'dev-status error';
+            log('[向导] 获取机器狗麦克风失败：WebSocket 未连接', 'error');
+        }
+    }
+
+    // ─────── 喇叭列表 ───────
+    function wizRefreshSpks() {
+        const statusEl = document.getElementById('wiz-spk-status');
+        if (!statusEl) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'get_robot_audio_devices',
+                mode: 'output'
+            }));
+            statusEl.textContent = "正在获取机器狗喇叭列表...";
+            statusEl.className = 'dev-status processing';
+            log('[向导] 已发送获取机器狗喇叭请求，等待狗子回应...', 'info');
+        } else {
+            statusEl.textContent = "后端未连接，无法获取机器狗喇叭";
+            statusEl.className = 'dev-status error';
+            log('[向导] 获取机器狗喇叭失败：WebSocket 未连接', 'error');
+        }
+    }
+
+    // ─────── 摄像头列表 ───────
+    function wizRefreshCams() {
+        const statusEl = document.getElementById('wiz-cam-status');
+        if (!statusEl) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'get_camera_list'
+            }));
+            statusEl.textContent = "正在获取机器狗摄像头列表...";
+            statusEl.className = 'dev-status processing';
+            log('[向导] 已发送获取机器狗摄像头请求，等待狗子回应...', 'info');
+        } else {
+            statusEl.textContent = "后端未连接，无法获取机器狗摄像头";
+            statusEl.className = 'dev-status error';
+            log('[向导] 获取机器狗摄像头失败：WebSocket 未连接', 'error');
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  设备测试: 麦克风
+    // ═══════════════════════════════════════════════════════════
+    async function wizTestMic() {
+        const devId = document.getElementById('wiz-mic-sel').value;
+        if (!devId) return alert('请选择麦克风');
+        sendTestCommand("mic", devId);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  设备测试: 喇叭/耳机
+    // ═══════════════════════════════════════════════════════════
+    async function wizTestSpeaker() {
+        const devId = document.getElementById('wiz-spk-sel').value;
+        if (!devId) return alert('请选择喇叭');
+        sendTestCommand("speaker", devId);
+    }
+
+    let wizCamStream = null;
+
+    // ═══════════════════════════════════════════════════════════
+    //  设备测试: 摄像头
+    // ═══════════════════════════════════════════════════════════
+    async function wizTestCam() {
+        const devId = document.getElementById('wiz-cam-sel').value;
+        if (!devId) return alert('请选择摄像头');
+        sendTestCommand("cam", devId);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  对话模式选择
+    // ═══════════════════════════════════════════════════════════
+    function selectDialogMode(mode) {
+        dialogMode = mode;
+        document.getElementById('mode-duplex').classList.toggle('selected', mode === 'duplex');
+        document.getElementById('mode-push2talk').classList.toggle('selected', mode === 'push2talk');
+        const statusEl = document.getElementById('wiz-mode-status');
+        if (statusEl) {
+            statusEl.textContent = mode === 'duplex' ? '當前模式: 全雙工 (duplex)' : '當前模式: 半雙工 (push2talk)';
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  声音选择
+    // ═══════════════════════════════════════════════════════════
+    function populateVoices() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({action: 'voices'}));
+        }
+    }
+
+    function handleVoicesData(voices) {
+        const sel = document.getElementById('wiz-voice-sel');
+        const prev = sel.value;
+        sel.innerHTML = '';
+        for (const [key, label] of Object.entries(voices)) {
+            const o = document.createElement('option');
+            o.value = key;
+            o.textContent = label;
+            sel.appendChild(o);
+        }
+        if (prev && [...sel.options].some(o => o.value === prev)) {
+            sel.value = prev;
+        } else if (selectedVoice && [...sel.options].some(o => o.value === selectedVoice)) {
+            sel.value = selectedVoice;
+        }
+        const selected = sel.options[sel.selectedIndex];
+        if (selected) {
+            const name = selected.textContent.split(' ')[0];
+            document.getElementById('wiz-voice-status').textContent = '当前声音: ' + name + ' — 可在百炼控制台配置更多声音';
+        }
+        updateVoiceIndicator();
+        log(`[向导] 已加载 ${Object.keys(voices).length} 种声音`, 'info');
+    }
+
+    function updateVoiceIndicator() {
+        const el = document.getElementById('mode-indicator');
+        const sel = document.getElementById('wiz-voice-sel');
+        const selected = sel.options[sel.selectedIndex];
+        if (selected) {
+            const name = selected.textContent.split(' ')[0];
+            if (el) {
+                el.title = 'AI声音: ' + selected.textContent;
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  百炼连接测试
+    // ═══════════════════════════════════════════════════════════
+    function ensureAudioContext() {
+        if (!audioCtx) {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                log('AudioContext 已创建', 'info');
+            } catch(e) {
+                log('创建 AudioContext 失败: ' + e.message, 'error');
+                return false;
+            }
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        return true;
+    }
+
+    function wizTestBailian() {
+        const btn = document.getElementById('wiz-test-bailian-btn');
+        const status = document.getElementById('wiz-bailian-status');
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            status.textContent = '后端 WebSocket 未连接, 请稍后再试';
+            status.className = 'dev-status err';
+            return;
+        }
+
+        btn.textContent = '测试中...';
+        btn.disabled = true;
+        btn.className = 'primary';
+        status.textContent = '正在连接百炼 API 并发送测试文本...';
+        status.className = 'dev-status testing';
+
+        const voiceSel = document.getElementById('wiz-voice-sel');
+        if (voiceSel) selectedVoice = voiceSel.value;
+
+        ws.send(JSON.stringify({action: 'test_bailian', voice: selectedVoice}));
+        log('[百炼测试] 已发送测试请求 (声音: ' + selectedVoice + ')', 'event');
+
+        setTimeout(() => {
+            if (btn.disabled) {
+                btn.disabled = false;
+                btn.textContent = '重新测试';
+                btn.className = 'primary';
+            }
+        }, 25000);
+    }
+
+    function playTestTTS(buf) {
+        if (!ensureAudioContext()) return;
+        console.log("收到音频包，大小:", buf.byteLength);
+        const int16 = new Int16Array(buf);
+        if (int16.length === 0) return;
+        const toRate = audioCtx.sampleRate;
+        const ratio = toRate / downRate;
+        const outLen = Math.floor(int16.length * ratio);
+        const f32 = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+            const si = i / ratio;
+            const idx = Math.floor(si);
+            const frac = si - idx;
+            const s0 = int16[idx] || 0;
+            const s1 = int16[Math.min(idx+1, int16.length-1)] || 0;
+            f32[i] = (s0*(1-frac) + s1*frac) / 32768;
+        }
+        const abuf = audioCtx.createBuffer(1, f32.length, toRate);
+        abuf.getChannelData(0).set(f32);
+        const src = audioCtx.createBufferSource();
+        src.buffer = abuf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+        if (selectedSpkId && typeof audioCtx.destination.setSinkId === 'function') {
+            audioCtx.setSinkId(selectedSpkId)
+                .catch((error) => console.error("音频切换失败:", error));
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  向导: 跳过 / 开始
+    // ═══════════════════════════════════════════════════════════
+    function wizSkip() {
+        closeWizard();
+        log('[向导] 跳过设备设置', 'info');
+    }
+
+    function wizStart() {
+        const videoImg = document.getElementById('wiz-cam-video');
+        if (wizCamStream && videoImg) {
+            videoImg.onerror = null;
+            videoImg.onload = null;
+            videoImg.src = '';
+        }
+        wizCamStream = null;
+
+        const wizMicSel = document.getElementById('wiz-mic-sel');
+        const wizSpkSel = document.getElementById('wiz-spk-sel');
+        const wizCamSel = document.getElementById('wiz-cam-sel');
+        const wizVoiceSel = document.getElementById('wiz-voice-sel');
+
+        selectedMicId = wizMicSel ? wizMicSel.value : 'default';
+        selectedSpkId = wizSpkSel ? wizSpkSel.value : 'default';
+        selectedCamId = wizCamSel ? wizCamSel.value : '0';
+        selectedVoice = wizVoiceSel ? wizVoiceSel.value : 'default';
+
+        const mainMicSel = document.getElementById('mic-sel');
+        if (mainMicSel && mainMicSel.options && selectedMicId) {
+            if ([...mainMicSel.options].some(o => o.value === selectedMicId)) {
+                mainMicSel.value = selectedMicId;
+            }
+        }
+
+        const micText = wizMicSel && wizMicSel.selectedOptions && wizMicSel.selectedOptions[0] ? wizMicSel.selectedOptions[0].textContent : '默认';
+        const spkText = wizSpkSel && wizSpkSel.selectedOptions && wizSpkSel.selectedOptions[0] ? wizSpkSel.selectedOptions[0].textContent : '默认';
+        const camText = wizCamSel && wizCamSel.selectedOptions && wizCamSel.selectedOptions[0] ? wizCamSel.selectedOptions[0].textContent : '默认';
+        const voiceText = wizVoiceSel && wizVoiceSel.selectedOptions && wizVoiceSel.selectedOptions[0] ? wizVoiceSel.selectedOptions[0].textContent : '默认';
+
+        if (typeof closeWizard === 'function') closeWizard();
+
+        log('[向导] 设备设置完成 — 麦克风: ' + micText, 'event');
+        log('[向导] 喇叭: ' + spkText, 'event');
+        log('[向导] 摄像头: ' + camText, 'event');
+        log('[向导] 对话模式: ' + (dialogMode === 'duplex' ? '全双工' : '半双工'), 'event');
+        log('[向导] AI声音: ' + selectedVoice + ' (' + voiceText + ')', 'event');
+
+        if (typeof updateModeIndicator === 'function') updateModeIndicator();
+        if (typeof updateVoiceIndicator === 'function') updateVoiceIndicator();
+
+        if (selectedCamId && !camOn) {
+            if (typeof startCam === 'function') {
+                startCam().catch(()=>{});
+            } else if (typeof toggleCam === 'function') {
+                toggleCam().catch(()=>{});
+            }
+        }
+
+        // ─── 自动启动百炼连接 ───
+        if (!micOn) {
+            // 自动启动麦克风并连接百炼
+            startMic();
+            if (micOn && ws?.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({action:'start', mode: dialogMode, voice: selectedVoice}));
+                log(`已自动请求后端连接百炼 (模式: ${dialogMode === 'duplex' ? '全双工' : '半双工'})`, 'event');
+            }
+        } else if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({action:'start', mode: dialogMode, voice: selectedVoice}));
+            log(`已自动请求后端连接百炼 (模式: ${dialogMode === 'duplex' ? '全双工' : '半双工'})`, 'event');
+        }
+    }
+
+    function closeWizard() {
+        document.getElementById('wizard-overlay').classList.add('hidden');
+    }
+
+    function showWizard() {
+        const wizMicSel = document.getElementById('wiz-mic-sel');
+        const wizCamSel = document.getElementById('wiz-cam-sel');
+
+        if (wizMicSel && wizMicSel.options && wizMicSel.options.length > 0) {
+            wizMicSel.options[0].selected = true;
+        }
+        if (wizCamSel && wizCamSel.options && wizCamSel.options.length > 0) {
+            wizCamSel.options[0].selected = true;
+        }
+
+        const wizardOverlay = document.getElementById('wizard-overlay');
+        if (wizardOverlay) {
+            wizardOverlay.classList.remove('hidden');
+        }
+
+        if (typeof selectDialogMode === 'function') {
+            selectDialogMode(dialogMode);
+        }
+
+        const voiceSel = document.getElementById('wiz-voice-sel');
+        if (voiceSel && voiceSel.options && selectedVoice) {
+            if ([...voiceSel.options].some(o => o.value === selectedVoice)) {
+                voiceSel.value = selectedVoice;
+            }
+        }
+
+        if (typeof wizRefreshMics === 'function') wizRefreshMics();
+        if (typeof wizRefreshSpks === 'function') wizRefreshSpks();
+        if (typeof wizRefreshCams === 'function') wizRefreshCams();
+        if (typeof populateVoices === 'function') populateVoices();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  麦克风设备 (主界面)
+    // ═══════════════════════════════════════════════════════════
+    window.refreshMics = function() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            console.log("正在请求机器狗麦克风列表...");
+            ws.send(JSON.stringify({
+                type: 'get_robot_audio_devices',
+                mode: 'input'
+            }));
+        } else {
+            log("WebSocket 未连接，无法获取机器狗设备列表", 'error');
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    //  麦克风采集
+    // ═══════════════════════════════════════════════════════════
+    function startMic() {
+        const devId = document.getElementById('mic-sel').value || selectedMicId;
+
+        if (!devId) {
+            log('请先选择机器狗麦克风', 'warn');
+            return;
+        }
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                action: 'start_robot_audio',
+                deviceId: devId
+            }));
+
+            micOn = true;
+            document.getElementById('mic-btn').classList.add('active');
+            log(`已向机器狗发送录音启动指令，设备=${devId}`, 'info');
+
+            const onMicData = function(e) {
+                if (!micOn || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+                if (dialogMode === 'push2talk' && state !== 'Listening') {
+                    skippedAudioCount = (skippedAudioCount || 0) + 1;
+                    if (skippedAudioCount <= 5 || skippedAudioCount % 100 === 0) {
+                        log(`麦克风采集中但音频未发送 (state=${state}, push2talk模式, 累计跳过${skippedAudioCount}次)`, 'warn');
+                    }
+                    return;
+                }
+
+                const input = e.inputBuffer.getChannelData(0);
+                const nativeRate = audioCtx ? audioCtx.sampleRate : 16000;
+                const targetRate = 16000;
+                const ratio = nativeRate / targetRate;
+                const outLen = Math.floor(input.length / ratio);
+                if (outLen === 0) return;
+
+                const int16 = new Int16Array(outLen);
+                for (let i = 0; i < outLen; i++) {
+                    const si = i * ratio;
+                    const idx = Math.floor(si);
+                    const frac = si - idx;
+                    const s0 = input[idx] || 0;
+                    const s1 = input[Math.min(idx + 1, input.length - 1)] || 0;
+                    int16[i] = Math.max(-32768, Math.min(32767, Math.round((s0 * (1 - frac) + s1 * frac) * 32767)));
+                }
+
+                let rms = 0;
+                for (let i = 0; i < int16.length; i++) rms += int16[i] * int16[i];
+                rms = Math.sqrt(rms / int16.length) / 32768;
+
+                const vizBar = document.getElementById('viz-bar');
+                if (vizBar) vizBar.style.width = Math.min(100, rms * 600) + '%';
+
+                // ─── 客户端 VAD 自动打断 ───
+                const MIN_SPEECH_CHUNKS = 8;
+                if (isDialogActive && dialogMode === 'duplex' && state === 'Responding' && !clientInterruptActive) {
+                    if (rms > 0.012) {
+                        speechAboveCount = (speechAboveCount || 0) + 1;
+                    } else {
+                        speechAboveCount = Math.max(0, (speechAboveCount || 0) - 3);
+                    }
+                    if (speechAboveCount >= MIN_SPEECH_CHUNKS) {
+                        clientInterruptActive = true;
+                        speechAboveCount = 0;
+                        log(`[自动打断] 检测到持续说话 (连续${MIN_SPEECH_CHUNKS}+块, rms=${rms.toFixed(4)}), 通知后端中断`, 'event');
+
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({action: 'interrupt'}));
+                        }
+                        setTimeout(() => { clientInterruptActive = false; }, 2000);
+                    }
+                }
+
+                if (state !== 'Responding') {
+                    speechAboveCount = 0;
+                    clientInterruptActive = false;
+                }
+
+                ws.send(int16.buffer);
+                upChunks = (upChunks || 0) + 1;
+                audioLogCounter = (audioLogCounter || 0) + 1;
+
+                const sUp = document.getElementById('s-up');
+                if (sUp) sUp.textContent = upChunks;
+
+                if (!audioFirstSent) {
+                    audioFirstSent = true;
+                    log(`首次发送音频! int16.length=${int16.length}, nativeRate=${nativeRate}Hz`, 'event');
+                }
+            };
+        } else {
+            log('WebSocket 未连接，无法启动机器狗录音', 'error');
+        }
+    }
+
+    function stopMic() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: 'stop_robot_audio' }));
+        }
+        micOn = false;
+        document.getElementById('mic-btn').classList.remove('active');
+        log('已发送停止录音指令', 'info');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  自动 VQA
+    // ═══════════════════════════════════════════════════════════
+    const VQA_KEYWORDS = [
+        '看到什么', '看到了什么', '你看到', '你看到了', '你看见', '看见了什么',
+        '你在看', '看什么', '看的环境', '看到的环境',
+        '拍摄照片', '拍张照片', '拍个照片', '拍一下', '帮我拍', '帮我拍照',
+        '拍照', '照一张', '拍张照', '请拍照', '请拍摄图片', '请拍摄',
+        '拍摄图片', '拍摄一下', '帮我拍摄',
+        '周围环境', '周围是什么', '环境是什么', '身边的环境', '你面前',
+        '眼前', '你眼前的', '描述环境', '描述一下环境',
+        '看看', '帮我看看', '你看', '你看一下',
+        '摄像头看看', '打开摄像头看看', '用摄像头看',
+        '看到这个', '看到吗', '看到了吗', '能看到什么', '能看到',
+        '看到的内容', '介绍一下看到', '描述一下看到', '看到的画面',
+        '你能看到', '你可以看到', '你是否看到',
+        '介绍一下环境', '描述环境', '看看周围', '看看这里',
+    ];
+
+    function checkAutoVQA(asrText) {
+        const now = Date.now();
+        if (now - lastAutoVqaTime < 8000) return false;
+        const text = asrText.toLowerCase();
+        for (const kw of VQA_KEYWORDS) {
+            if (text.includes(kw)) {
+                lastAutoVqaTime = now;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  唤醒词检测
+    // ═══════════════════════════════════════════════════════════
+    const WAKE_UP_KEYWORDS = ['开始对话', '开始聊天', '开始交流', '启动对话', '开启对话'];
+    const SLEEP_KEYWORDS   = ['停止对话', '结束对话', '关闭对话', '停止聊天', '结束聊天', '退出对话', '退出聊天'];
+
+    function checkWakeWord(asrText) {
+        if (!asrText) return null;
+        const text = asrText.toLowerCase();
+        const hasName = text.includes('小创');
+        if (!hasName) return null;
+        for (const kw of WAKE_UP_KEYWORDS) {
+            if (text.includes(kw)) {
+                log(`[唤醒词] 检测到唤醒指令: "${asrText}" → 匹配关键词"${kw}"`, 'event');
+                return 'wake';
+            }
+        }
+        for (const kw of SLEEP_KEYWORDS) {
+            if (text.includes(kw)) {
+                log(`[唤醒词] 检测到休眠指令: "${asrText}" → 匹配关键词"${kw}"`, 'event');
+                return 'sleep';
+            }
+        }
+        log(`[唤醒词] 包含"小创"但未匹配动作词: "${asrText}"`, 'debug');
+        return null;
+    }
+
+    function setDialogActive(active) {
+        isDialogActive = active;
+        const badge = document.getElementById('wake-badge');
+        if (badge) {
+            if (active) {
+                badge.textContent = '对话中';
+                badge.className = 'badge badge-ok';
+                badge.title = '对话已激活, 正常交互中';
+            } else {
+                badge.textContent = '待唤醒';
+                badge.className = 'badge badge-warn';
+                badge.title = '请说"小创小创, 开始对话"唤醒';
+            }
+        }
+        const txtIn = document.getElementById('txt-in');
+        if (txtIn) {
+            txtIn.placeholder = active
+                ? '输入文本发送给 AI (Enter 发送)...'
+                : '输入文字将自动激活对话...';
+        }
+        const toast = document.getElementById('wake-toast');
+        if (toast) {
+            toast.textContent = active ? '对话已激活' : '对话已休眠';
+            toast.className = 'wake-toast ' + (active ? 'wake' : 'sleep');
+            void toast.offsetWidth;
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 2000);
+        }
+        log(active ? '★ 对话已激活 — 请开始说话' : '★ 对话已休眠 — 等待唤醒词"小创小创, 开始对话"', 'event');
+        if (!active) {
+            chat('[系统] 对话已休眠, 说"小创小创, 开始对话"唤醒, 或直接打字/点击"待唤醒"标签激活', 'sys');
+            doInterrupt();
+            _dormantHintShown = false;
+        } else {
+            chat('[系统] 对话已激活, 小创在线为您服务', 'sys');
+            _dormantHintShown = false;
+        }
+    }
+
+    function showDormantHint(source) {
+        if (_dormantHintShown) return;
+        _dormantHintShown = true;
+        const hint = source === 'voice'
+            ? '[系统] 检测到语音, 但对话尚未激活。请说"小创小创, 开始对话", 或点击顶部"待唤醒"标签激活'
+            : '[系统] 对话尚未激活。请说"小创小创, 开始对话", 或点击顶部"待唤醒"标签激活';
+        chat(hint, 'sys');
+        log(`[休眠提示] 已显示 (${source})`, 'info');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  WebSocket 到后端 (Modified: port 8765)
+    // ═══════════════════════════════════════════════════════════
+    function connectWS() {
+        ws = new WebSocket(`ws://${location.hostname}:8765/ws`);
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = () => {
+            log('WebSocket 已连接到后端 (8765)', 'info');
+            ws.send(JSON.stringify({ "type": "get_camera_list" }));
+            ws.send(JSON.stringify({ "type": "get_robot_audio_devices", "mode": "input" }));
+            ws.send(JSON.stringify({ "type": "get_robot_audio_devices", "mode": "output" }));
+
+            const wsSt = document.getElementById('ws-st');
+            if (wsSt) { wsSt.textContent = '已连接'; }
+
+            const srvBadge = document.getElementById('srv-badge');
+            if (srvBadge) {
+                srvBadge.textContent = '后端已连接';
+                srvBadge.className = 'badge badge-ok';
+            }
+
+            if (typeof populateVoices === 'function') { populateVoices(); }
+        };
+
+        ws.onmessage = (e) => {
+            let msg;
+            try {
+                msg = JSON.parse(e.data);
+            } catch(err) {
+                // Try binary (audio data)
+                if (e.data instanceof ArrayBuffer) {
+                    dnChunks++;
+                    const dnEl = document.getElementById('s-dn');
+                    if (dnEl) dnEl.textContent = dnChunks;
+                    // 播放 TTS 音頻 (48kHz PCM, 從主服務器廣播)
+                    handleTTSSound(e.data);
+                    return;
+                }
+                log('解析消息失败: ' + err, 'error');
+                return;
+            }
+
+            switch(msg.type) {
+                case 'mic_list':
+                    renderDeviceList('wiz-mic-sel', 'wiz-mic-status', msg.devices, '麦克风');
+                    renderDeviceList('mic-sel', 'mic-status', msg.devices, '麦克风');
+                    break;
+
+                case 'speaker_list':
+                    renderDeviceList('wiz-spk-sel', 'wiz-spk-status', msg.devices, '喇叭');
+                    break;
+
+                case 'camera_list':
+                    renderDeviceList('wiz-cam-sel', 'wiz-cam-status', msg.devices, '摄像头');
+                    break;
+
+                case 'status':
+                    updateBailianBadge(msg.data.connected);
+                    handleEvent(msg);
+                    break;
+
+                case 'restore_device_state':
+                    console.log("正在恢复设备选择:", msg);
+                    if (msg.mic_id) {
+                        ['wiz-mic-sel', 'mic-sel'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = msg.mic_id;
+                                el.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    }
+                    if (msg.spk_id) {
+                        ['wiz-spk-sel'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = msg.spk_id;
+                                el.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    }
+                    break;
+
+                case 'tts_audio':
+                    // Binary TTS audio received as JSON with base64
+                    if (msg.data && msg.data.buffer) {
+                        const bytes = Uint8Array.from(atob(msg.data.buffer), c => c.charCodeAt(0));
+                        handleTTSSound(bytes.buffer);
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+            handleEvent(msg);
+        };
+
+        ws.onclose = () => {
+            log('WebSocket 断开, 3秒后重连...', 'warn');
+            const wsSt = document.getElementById('ws-st');
+            if (wsSt) wsSt.textContent = '已断开';
+            const srvBadge = document.getElementById('srv-badge');
+            if (srvBadge) {
+                srvBadge.textContent = '后端断开';
+                srvBadge.className = 'badge badge-err';
+            }
+            setTimeout(connectWS, 3000);
+        };
+
+        ws.onerror = () => { log('WebSocket 错误', 'error'); };
+
+        // Handle binary messages from the onmessage already set above
+        // But we need to handle binary separately since we set binaryType='arraybuffer'
+        // The onmessage function above already handles non-JSON (binary) data in the catch block
+        const origSend = ws.send;
+        ws._binaryHandler = function(arrayBuffer) {
+            dnChunks++;
+            const dnEl = document.getElementById('s-dn');
+            if (dnEl) dnEl.textContent = dnChunks;
+            handleTTSSound(arrayBuffer);
+        };
+    }
+
+    function handleTTSSound(buf) {
+        if (!ensureAudioContext()) return;
+        try {
+            const int16 = new Int16Array(buf);
+            if (int16.length === 0) return;
+            const toRate = audioCtx.sampleRate;
+            const ratio = toRate / downRate;
+            const outLen = Math.floor(int16.length * ratio);
+            if (outLen === 0) return;
+            const f32 = new Float32Array(outLen);
+            for (let i = 0; i < outLen; i++) {
+                const si = i / ratio;
+                const idx = Math.floor(si);
+                const frac = si - idx;
+                const s0 = int16[idx] || 0;
+                const s1 = int16[Math.min(idx+1, int16.length-1)] || 0;
+                f32[i] = (s0*(1-frac) + s1*frac) / 32768;
+            }
+            const abuf = audioCtx.createBuffer(1, f32.length, toRate);
+            abuf.getChannelData(0).set(f32);
+            const src = audioCtx.createBufferSource();
+            src.buffer = abuf;
+            src.connect(audioCtx.destination);
+            src.start(0);
+        } catch(e) {
+            console.error("TTS audio playback error:", e);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  处理服务端事件
+    // ═══════════════════════════════════════════════════════════
+    function handleEvent(msg) {
+        const {type, data} = msg;
+        switch(type) {
+            case 'init':
+                state = data.state || 'IDLE';
+                downRate = data.downstream_sample_rate || 24000;
+                safeSetText('session-info', data.session_dir, '');
+                safeSetText('s-dir', data.session_dir, '-');
+                updateUI();
+                if (data.dialog_id) {
+                    safeSetText('did', data.dialog_id.slice(0, 8) + '...', '');
+                }
+                safeSetText('rounds', data.round_count, 0);
+                if (data.connected) {
+                    updateBailianBadge(true);
+                } else {
+                    updateBailianBadge(false);
+                }
+                log(`初始化完成 | downstream=${downRate}Hz | 会话=${data.session_dir}`, 'info');
+                break;
+
+            case 'connected':
+                updateBailianBadge(true);
+                log('百炼服务器已连接', 'event');
+                break;
+
+            case 'started':
+                document.getElementById('did').textContent = (data||'').slice(0,8)+'...';
+                log(`会话创建: dialog_id=${data}`, 'event');
+                chat('会话已建立, 请开始说话', 'sys');
+                break;
+
+            case 'state_changed':
+                state = data;
+                updateUI();
+                log(`状态 → ${data}`, data==='Listening'?'event':'info');
+                if (data === 'Listening') {
+                    document.getElementById('rounds').textContent =
+                    parseInt(document.getElementById('rounds').textContent)+1;
+                    if (isDialogActive && pendingVQA) {
+                        log('[自动VQA] 对话已稳定 (Listening), 延迟1秒后执行拍照...', 'event');
+                        setTimeout(() => {
+                            if (pendingVQA) {
+                                pendingVQA = false;
+                                doVQA();
+                            }
+                        }, 1000);
+                    }
+                }
+                break;
+
+            case 'asr_content':
+                if (data.finished) {
+                    const wakeAction = checkWakeWord(data.text);
+                    if (wakeAction === 'wake' && !isDialogActive) {
+                        setDialogActive(true);
+                        ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+                        break;
+                    } else if (wakeAction === 'sleep' && isDialogActive) {
+                        setDialogActive(false);
+                        ws.send(JSON.stringify({ type: 'set_woken', woken: false }));
+                        break;
+                    }
+                    if (!isDialogActive) {
+                        showDormantHint('voice');
+                        log(`[休眠] 忽略 ASR: "${data.text}"`, 'debug');
+                        return;
+                    }
+                    if (curAsr) { curAsr.textContent = data.text; curAsr.className = ''; curAsr = null; }
+                    log(`ASR 最终: "${data.text}"`, 'info');
+                    if (checkAutoVQA(data.text)) {
+                        log(`[自动VQA] 检测到拍照关键词, 等待对话稳定后自动拍照...`, 'event');
+                        chat('[自动拍照] 正在识别画面...', 'sys');
+                        pendingVQA = true;
+                        setTimeout(() => {
+                            if (pendingVQA && state !== 'Thinking' && state !== 'Responding') {
+                                pendingVQA = false;
+                                doVQA();
+                            } else if (pendingVQA) {
+                                log('[自动VQA] 对话仍在进行中, 继续等待...', 'info');
+                            }
+                        }, 1500);
+                    }
+                } else {
+                    const wakeStream = checkWakeWord(data.text);
+                    if (wakeStream === 'wake' && !isDialogActive) {
+                        setDialogActive(true);
+                        ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+                        break;
+                    } else if (wakeStream === 'sleep' && isDialogActive) {
+                        setDialogActive(false);
+                        ws.send(JSON.stringify({ type: 'set_woken', woken: false }));
+                        break;
+                    }
+                    if (!isDialogActive) { showDormantHint('voice'); break; }
+                    if (!curAsr) curAsr = chat(data.text, 'user', true);
+                    else curAsr.textContent = data.text;
+                }
+                break;
+
+            case 'asr_final':
+                const wakeFinal = checkWakeWord(data);
+                if (wakeFinal === 'wake' && !isDialogActive) {
+                    setDialogActive(true);
+                    ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+                    break;
+                } else if (wakeFinal === 'sleep' && isDialogActive) {
+                    setDialogActive(false);
+                    ws.send(JSON.stringify({ type: 'set_woken', woken: false }));
+                    break;
+                }
+                if (!isDialogActive) { showDormantHint('voice'); break; }
+                if (curAsr) { curAsr.textContent = data; curAsr.className = ''; curAsr = null; }
+                else if (data) chat(data, 'user');
+                if (data && checkAutoVQA(data)) {
+                    log(`[自动VQA] 检测到拍照关键词, 等待对话稳定后自动拍照...`, 'event');
+                    chat('[自动拍照] 正在识别画面...', 'sys');
+                    pendingVQA = true;
+                    setTimeout(() => {
+                        if (pendingVQA && state !== 'Thinking' && state !== 'Responding') {
+                            pendingVQA = false;
+                            doVQA();
+                        } else if (pendingVQA) {
+                            log('[自动VQA] 对话仍在进行中, 继续等待...', 'info');
+                        }
+                    }, 1500);
+                }
+                break;
+
+            case 'llm_content':
+                if (!isDialogActive) { showDormantHint('voice'); break; }
+                if (data.finished) {
+                    if (curLlm) { curLlm.textContent = data.text; curLlm.className = ''; curLlm = null; }
+                    else { chat(data.text, 'ai'); }
+                    log(`LLM 最终: "${data.text}"`, 'info');
+                    if (data.extra_info?.commands?.includes('visual_qa')) {
+                        log('检测到 visual_qa, 自动拍照...', 'event');
+                        doVQA();
+                    }
+                } else {
+                    if (data.text) {
+                        if (!curLlm) curLlm = chat(data.text, 'ai', true);
+                        else curLlm.textContent = data.text;
+                    }
+                }
+                break;
+
+            case 'responding_started':
+                ttsRespondingStartTime = Date.now();
+                log('AI 开始回复', 'info');
+                break;
+
+            case 'responding_ended':
+                log('AI 回复结束', 'info');
+                break;
+
+            case 'interrupted':
+                log('打断已生效', 'event');
+                pendingVQA = false;
+                break;
+
+            case 'error':
+                log('错误: '+data, 'error');
+                chat('⚠ '+data, 'sys');
+                break;
+
+            case 'disconnected':
+                state = 'DISCONNECTED';
+                updateBailianBadge(false);
+                log('百炼服务器断开: '+data, 'error');
+                chat('百炼服务器已断开连接, 请点击"重连"按钮', 'sys');
+                break;
+
+            case 'status':
+                log(`状态: state=${data.state} connected=${data.connected} rounds=${data.round_count}`, 'info');
+                log(`  浏览器→服务器: ${data.audio_chunks_from_browser} chunks / ${data.audio_chunks_sent} chunks (转发)`, 'info');
+                log(`  服务器→浏览器: ${data.tts_chunks_received} TTS chunks`, 'info');
+                if (data.audio_chunks_from_browser === 0) {
+                    log(`  注意: 服务器未收到任何音频! 请检查麦克风是否启动`, 'warn');
+                }
+                break;
+
+            case 'log':
+                log(data, 'info');
+                break;
+
+            case 'voices':
+                handleVoicesData(data);
+                break;
+
+            case 'test_status':
+                {
+                    const statusEl = document.getElementById('wiz-bailian-status');
+                    if (statusEl) {
+                        statusEl.textContent = data;
+                        statusEl.className = 'dev-status testing';
+                    }
+                    log('[百炼测试] ' + data, 'event');
+                }
+                break;
+
+            case 'reset_audio':
+                log('[音频] 收到后端重置音频指令', 'debug');
+                break;
+
+            case 'test_result':
+                {
+                    const statusEl = document.getElementById('wiz-bailian-status');
+                    const btn = document.getElementById('wiz-test-bailian-btn');
+                    if (data.ok) {
+                        let msg = `百炼连接正常! 声音: ${data.voice}`;
+                        if (data.llm_text) msg += ` | AI回复: "${data.llm_text.substring(0, 60)}..."`;
+                        if (data.tts_chunks > 0) msg += ` | TTS: ${data.tts_chunks}块`;
+                        if (data.warning) msg += ` | ${data.warning}`;
+                        if (statusEl) { statusEl.textContent = msg; statusEl.className = 'dev-status ok'; }
+                        if (btn) { btn.textContent = '测试通过'; btn.className = 'success'; }
+                        log('[百炼测试] 通过: ' + msg, 'event');
+                    } else {
+                        if (statusEl) { statusEl.textContent = '测试失败: ' + (data.error || '未知错误'); statusEl.className = 'dev-status err'; }
+                        if (btn) { btn.textContent = '测试失败'; btn.className = 'danger'; }
+                        log('[百炼测试] 失败: ' + (data.error || ''), 'error');
+                    }
+                    setTimeout(() => { if (btn) { btn.textContent = '重新测试'; btn.className = 'primary'; btn.disabled = false; } }, 3000);
+                }
+                break;
+
+            case 'tts_audio_binary':
+                // Handled separately as binary data
+                break;
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('dot').className = 'state-dot '+state.toLowerCase();
+        document.getElementById('state-txt').textContent = state;
+        const micBtn = document.getElementById('mic-btn');
+        if (dialogMode === 'push2talk' && state === 'Responding') {
+            micBtn.title = '点击打断AI';
+            micBtn.style.borderColor = 'orange';
+        } else {
+            micBtn.title = '切换麦克风';
+            micBtn.style.borderColor = '';
+        }
+    }
+
+    function updateModeIndicator() {
+        const el = document.getElementById('mode-indicator');
+        if (dialogMode === 'duplex') {
+            el.textContent = '全双工';
+            el.className = 'badge badge-info';
+            el.title = '全双工模式 — 可随时打断AI (点击修改)';
+        } else {
+            el.textContent = '半双工';
+            el.className = 'badge badge-warn';
+            el.title = '半双工模式 — 需轮流发言 (点击修改)';
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  用户操作
+    // ═══════════════════════════════════════════════════════════
+    async function toggleMic() {
+        if (dialogMode === 'push2talk' && state === 'Responding' && micOn) {
+            doInterrupt();
+            log('[Push2Talk] 打断AI回复', 'event');
+            return;
+        }
+
+        if (micOn) {
+            stopMic();
+            if (ws?.readyState === WebSocket.OPEN) {
+                if (dialogMode === 'push2talk') {
+                    ws.send(JSON.stringify({action:'stop_speech'}));
+                    log('[Push2Talk] 已停止本轮语音', 'event');
+                }
+            }
+        } else {
+            await startMic();
+            if (micOn && ws?.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({action:'start', mode: dialogMode, voice: selectedVoice}));
+                log(`麦克风就绪, 已请求后端连接百炼 (模式: ${dialogMode === 'duplex' ? '全双工' : '半双工'}, 声音: ${selectedVoice})...`, 'event');
+            }
+        }
+    }
+
+    function sendTxt() {
+        const inp = document.getElementById('txt-in');
+        const t = inp.value.trim();
+        log(`[调试] 发送前状态检测: isDialogActive = ${isDialogActive}`, 'debug');
+        if (!t || !ws) return;
+        const wakeAction = checkWakeWord(t);
+        if (wakeAction === 'wake' && !isDialogActive) { setDialogActive(true); ws.send(JSON.stringify({ type: 'set_woken', woken: true })); inp.value = ''; return; }
+        if (wakeAction === 'sleep' && isDialogActive) { setDialogActive(false); ws.send(JSON.stringify({ type: 'set_woken', woken: false })); inp.value = ''; return; }
+        if (!isDialogActive) {
+            setDialogActive(true);
+            ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+            log('[自动激活] 用户发送文字, 自动激活对话', 'event');
+        }
+        ws.send(JSON.stringify({action:'text', text:t}));
+        chat(t, 'user');
+        log(`发送文本: "${t}"`, 'info');
+        inp.value = '';
+    }
+
+    function doInterrupt() {
+        if (!ws) return;
+        ws.send(JSON.stringify({action:'interrupt'}));
+        log('发送打断', 'info');
+        pendingVQA = false;
+    }
+
+    function doReconnect() {
+        if (!ws) return;
+        if (micOn) {
+            ws.send(JSON.stringify({action:'stop'}));
+            log('正在停止旧连接...', 'info');
+            setTimeout(() => {
+                ws.send(JSON.stringify({action:'start', mode: dialogMode, voice: selectedVoice}));
+                log(`已请求重连百炼 (模式: ${dialogMode === 'duplex' ? '全双工' : '半双工'}, 声音: ${selectedVoice})...`, 'event');
+            }, 1000);
+        } else {
+            log('请先启动麦克风, 再点击重连', 'warn');
+        }
+    }
+
+    function doStatus() {
+        if (!ws) return;
+        ws.send(JSON.stringify({action:'status'}));
+    }
+
+    function doShutdown() {
+        if (!confirm('确定要关闭服务器吗？关闭后需要手动重新启动 python web_app.py')) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({action:'shutdown'}));
+            log('已请求关闭服务器...', 'warn');
+        }
+    }
+
+    // ─── 摄像头管理 ─────────────
+    async function toggleCam() {
+        const camBtn = document.getElementById('cam-btn');
+        const container = document.getElementById('dog-cam-container');
+        const imgStream = document.getElementById('dog-cam-stream');
+        const STREAM_URL = `${BACKEND_URL}/video_feed/cam3`;
+
+        if (camOn) {
+            if (imgStream) imgStream.src = '';
+            if (container) container.style.display = 'none';
+            if (camBtn) {
+                camBtn.textContent = '摄像头';
+                camBtn.style.background = 'rgba(255,255,255,0.05)';
+                camBtn.classList.remove('active');
+            }
+            camOn = false;
+            log('[硬件] 已关闭摄像头预览', 'info');
+        } else {
+            if (container && imgStream) {
+                imgStream.src = STREAM_URL;
+                container.style.display = 'block';
+            }
+            if (camBtn) {
+                camBtn.textContent = '关闭摄像头';
+                camBtn.style.background = 'rgba(248, 81, 73, 0.25)';
+                camBtn.classList.add('active');
+            }
+            camOn = true;
+            log(`[硬件] 已连接机器狗摄像头 (cam3)`, 'info');
+        }
+    }
+
+    async function startCam() {
+        try {
+            const devId = selectedCamId || document.getElementById('wiz-cam-sel')?.value || '';
+            const constraints = devId
+                ? {video:{deviceId:{exact:devId}, width:640, height:480}, audio:false}
+                : {video:{width:640, height:480}, audio:false};
+            camStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const video = document.getElementById('cam-video');
+            video.srcObject = camStream;
+            document.getElementById('cam-box').style.display = 'block';
+            camOn = true;
+            log(`摄像头已开启 (实时预览, 不消耗API/流量) 设备=${devId ? devId.slice(0,12) : '默认'}`, 'info');
+        } catch(e) {
+            log('摄像头启动失败: ' + e.message, 'error');
+        }
+    }
+
+    function stopCam() {
+        if (camStream) { camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+        document.getElementById('cam-video').srcObject = null;
+        document.getElementById('cam-box').style.display = 'none';
+        camOn = false;
+        log('摄像头已关闭', 'info');
+    }
+
+    async function doVQA() {
+        try {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('VQA: 已发送请求，正在抓取固定摄像头 cam3...', 'info');
+                chat('[拍照识别] 正在请求 AI 进行视觉分析...', 'sys');
+
+                ws.send(JSON.stringify({
+                    type: 'vqa',
+                    cam_id: 3
+                }));
+            } else {
+                log('WebSocket 未连接，无法发送 VQA 请求', 'error');
+                chat('[拍照识别] 失败: 与机器狗连接已断开', 'sys');
+            }
+        } catch(e) {
+            log('VQA 拍照指令发送失败: ' + e.message, 'error');
+            console.error("VQA error:", e);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Device list rendering
+    // ═══════════════════════════════════════════════════════════
+    function updateBailianBadge(isConnected) {
+        const badge = document.getElementById('api-badge');
+        if (!badge) return;
+        badge.textContent = isConnected ? '百炼已连接' : '百炼未连接';
+        badge.className = isConnected ? 'badge badge-ok' : 'badge badge-err';
+    }
+
+    function renderDeviceList(listId, statusId, devices, label) {
+        const selectEl = document.getElementById(listId);
+        const statusEl = document.getElementById(statusId);
+        if (!selectEl) return;
+        selectEl.innerHTML = '';
+
+        if (devices && devices.length > 0) {
+            devices.forEach((dev) => {
+                const option = document.createElement('option');
+                option.value = dev.id || dev;
+                option.textContent = dev.name || dev;
+                selectEl.appendChild(option);
+            });
+            if (statusEl) { statusEl.textContent = `检测到 ${devices.length} 个${label}`; statusEl.className = 'dev-status'; }
+        } else {
+            const option = document.createElement('option');
+            option.value = 0;
+            option.textContent = `未检测到${label}`;
+            selectEl.appendChild(option);
+            if (statusEl) { statusEl.textContent = `未检测到${label}`; statusEl.className = 'dev-status error'; }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  初始化
+    // ═══════════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', () => {
+        log('页面加载完成 — 唤醒词功能 v3.0 已启用', 'info');
+        log('休眠状态: isDialogActive=' + isDialogActive + ' (需说"小创小创, 开始对话"激活)', 'event');
+
+        chat('欢迎! 对话默认处于休眠状态, 请通过以下方式激活:', 'sys');
+        chat('① 语音说"小创小创, 开始对话"  ② 点击顶部"待唤醒"标签  ③ 直接输入文字发送(自动激活)', 'sys');
+
+        connectWS();
+
+        wizRefreshMics();
+        wizRefreshSpks();
+        wizRefreshCams();
+        refreshMics();
+        populateVoices();
+
+        const wizVoiceSel = document.getElementById('wiz-voice-sel');
+        if (wizVoiceSel) {
+            wizVoiceSel.addEventListener('change', () => {
+                selectedVoice = document.getElementById('wiz-voice-sel').value;
+                const selected = document.getElementById('wiz-voice-sel').selectedOptions[0];
+                const name = selected ? selected.textContent.split(' ')[0] : selectedVoice;
+                const voiceStatus = document.getElementById('wiz-voice-status');
+                if (voiceStatus) voiceStatus.textContent = '当前声音: ' + name + ' — 可在百炼控制台配置更多声音';
+                if (typeof updateVoiceIndicator === 'function') updateVoiceIndicator();
+                log(`[向导] 声音切换: ${selectedVoice}`, 'info');
+            });
+        }
+
+        // 麦克风按钮事件绑定
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) {
+            micBtn.addEventListener('click', toggleMic);
+        }
+
+        // 麦克风下拉变化 — 切换后自动重启
+        const micSel = document.getElementById('mic-sel');
+        if (micSel) {
+            micSel.addEventListener('change', () => {
+                selectedMicId = micSel.value;
+                if (micOn) { stopMic(); startMic(); }
+            });
+        }
+
+        log('请在上方"设备设置"面板中选择并测试你的麦克风、喇叭和摄像头', 'event');
+        log('测试完成后点击"开始对话"按钮即可连接百炼，或直接点击麦克风按钮开始对话', 'event');
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    //  Expose functions to global window (for onclick handlers)
+    // ═══════════════════════════════════════════════════════════
+    window.wizStart = wizStart;
+    window.wizSkip = wizSkip;
+    window.closeWizard = closeWizard;
+    window.wizRefreshMics = wizRefreshMics;
+    window.wizRefreshSpks = wizRefreshSpks;
+    window.wizRefreshCams = wizRefreshCams;
+    window.wizTestMic = wizTestMic;
+    window.wizTestSpeaker = wizTestSpeaker;
+    window.wizTestCam = wizTestCam;
+    window.selectDialogMode = selectDialogMode;
+    window.refreshMics = refreshMics;
+    window.sendTxt = sendTxt;
+    window.toggleCam = toggleCam;
+    window.doVQA = doVQA;
+    window.doInterrupt = doInterrupt;
+    window.doReconnect = doReconnect;
+    window.clearChat = clearChat;
+    window.setDialogActive = setDialogActive;
+    window.showWizard = showWizard;
+    window.wizTestBailian = wizTestBailian;
+    window.playTestTTS = playTestTTS;
+    window.doStatus = doStatus;
+    window.doShutdown = doShutdown;
+
+    // Also expose needed state variables
+    window.micOn = micOn;
+    window.state = state;
+    window.dialogMode = dialogMode;
+    window.selectedVoice = selectedVoice;
+    window.ws = ws;
+    </script>
+</body>
+</html>

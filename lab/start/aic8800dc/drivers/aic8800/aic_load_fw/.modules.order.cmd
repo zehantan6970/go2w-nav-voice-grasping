@@ -1,0 +1,1 @@
+cmd_/home/unitree/lab/start/aic8800dc/drivers/aic8800/aic_load_fw/modules.order := {   echo /home/unitree/lab/start/aic8800dc/drivers/aic8800/aic_load_fw/aic_load_fw.ko; :; } | awk '!x[$$0]++' - > /home/unitree/lab/start/aic8800dc/drivers/aic8800/aic_load_fw/modules.order

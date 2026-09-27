@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS 2 实时地图与定位监控</title>
+    
+    <!-- ==================== 1. 严格顺序引入核心依赖库 ==================== -->
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://code.createjs.com/1.0.0/easeljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros2d@0.9.0/build/ros2d.min.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        #status {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            background: #ff4d4f;
+            color: white;
+        }
+        #map-container {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 10px;
+            width: 800px;
+            height: 600px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .controls {
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h2>🤖 机器人实时地图 & 定位监控</h2>
+    <div id="status">连接状态: 正在建立连接...</div>
+</div>
+
+<!-- 渲染地图的容器 -->
+<div id="map-container">
+    <div id="map"></div>
+</div>
+
+<div class="controls">
+    实时坐标: <span id="pose-info">X: 0.00, Y: 0.00, Yaw: 0°</span>
+</div>
+
+<script>
+    const statusDiv = document.getElementById('status');
+    const poseInfo = document.getElementById('pose-info');
+
+    const robot_ip = '10.160.70.119'; 
+
+    // 1. 初始化 ROS 连接
+    const ros = new ROSLIB.Ros({
+        url: `ws://${robot_ip}:9090`
+    });
+
+    ros.on('connection', () => {
+        statusDiv.innerText = '✔ 已连上机器人';
+        statusDiv.style.background = '#52c41a';
+    });
+
+    ros.on('error', (err) => {
+        console.error("ROS 连接错误:", err);
+        statusDiv.innerText = '❌ 连接失败';
+        statusDiv.style.background = '#ff4d4f';
+    });
+
+    ros.on('close', () => {
+        statusDiv.innerText = '⚠ 连接已断开';
+        statusDiv.style.background = '#fa8c16';
+    });
+
+    // 2. 创建 800x600 视图
+    const canvasWidth = 800;
+    const canvasHeight = 600;
+    const viewer = new ROS2D.Viewer({
+        divID: 'map',
+        width: canvasWidth,
+        height: canvasHeight
+    });
+
+    // 全局状态变量
+    let mapGrid = null;       
+    let mapPose = null;       
+    let mapResolution = 0.05; 
+    
+    let lastMapWidth = 0;
+    let lastMapHeight = 0;
+
+    // 3. 🎯 独立创建代表狗的定位小蓝箭头
+    // 不再把它作为 mapGrid 的子元素，而是直接画在 viewer.scene 物理坐标系的最顶层（以“米”为单位）
+    const robotMarker = new createjs.Shape();
+    robotMarker.graphics.beginFill("#ff4d4f")
+                        .beginStroke("#000000")
+                        .setStrokeStyle(0.03)
+                        .moveTo(0, -0.12)    // 物理尺寸：高 0.3 米
+                        .lineTo(0.08, 0.1)   // 物理宽度的右下角
+                        .lineTo(-0.08, 0.1)  // 物理宽度的左下角
+                        .closePath();
+    
+    // 因为现在箭头直接画在 scene 上（物理空间），缩放必须为 1.0（对应米级）
+    robotMarker.scaleX = 1.0;
+    robotMarker.scaleY = 1.0;
+
+    // 4. 手动订阅 /map
+    const mapTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/map',
+        messageType: 'nav_msgs/msg/OccupancyGrid',
+        qos: {
+            reliability: 'reliable',
+            durability: 'transient_local', 
+            history: 'keep_last',
+            depth: 1
+        }
+    });
+
+    mapTopic.subscribe((message) => {
+        if (!message || !message.info) return;
+
+        const width = message.info.width;
+        const height = message.info.height;
+        const sizeChanged = (width !== lastMapWidth || height !== lastMapHeight);
+
+        // 先移除旧地图层
+        if (mapGrid) {
+            viewer.scene.removeChild(mapGrid);
+        }
+
+        mapPose = message.info.origin;
+        mapResolution = message.info.resolution;
+
+        // 创建新地图
+        mapGrid = new ROS2D.OccupancyGrid({
+            message: message
+        });
+
+        // 🎯 关键：先加地图到最底层
+        viewer.scene.addChild(mapGrid);
+
+        // 重新计算居中和缩放
+        if (sizeChanged && width > 0 && height > 0) {
+            console.log(`✔ 重新计算居中... 地图尺寸: ${width}x${height}`);
+
+            const mapWidthMeters = width * mapResolution;
+            const mapHeightMeters = height * mapResolution;
+
+            const scaleX = (canvasWidth / mapWidthMeters) * 0.90;
+            const scaleY = (canvasHeight / mapHeightMeters) * 0.90;
+            const bestScale = Math.min(scaleX, scaleY);
+
+            viewer.scene.scaleX = bestScale;
+            viewer.scene.scaleY = bestScale;
+
+            const mapCenterX = mapPose.position.x + (mapWidthMeters / 2);
+            const mapCenterY = mapPose.position.y + (mapHeightMeters / 2);
+
+            viewer.scene.x = (canvasWidth / 2) - (mapCenterX * bestScale);
+            viewer.scene.y = (canvasHeight / 2) + (mapCenterY * bestScale); 
+
+            lastMapWidth = width;
+            lastMapHeight = height;
+        }
+
+        // 🎯 关键：不管有没有重建地图，都确保小蓝箭头在地图的【上层】被渲染
+        // 先移除，再添加，保证层级永远最靠前，避免被地图遮挡
+        viewer.scene.removeChild(robotMarker);
+        viewer.scene.addChild(robotMarker);
+    });
+
+    // 5. 订阅 Odom 话题（匹配 Best Effort QoS）
+    const poseListener = new ROSLIB.Topic({
+        ros: ros,
+        name: '/unitree/slam_relocation/odom', 
+        messageType: 'nav_msgs/msg/Odometry',
+        qos: {
+            reliability: 'best_effort',
+            durability: 'volatile',
+            depth: 10
+        }
+    });
+
+    poseListener.subscribe((message) => {
+        if (!message || !message.pose || !message.pose.pose) {
+            return;
+        }
+
+        const position = message.pose.pose.position;
+        const orientation = message.pose.pose.orientation;
+
+        if (!position || !orientation) return;
+
+        // 四元数转 Yaw 弧度
+        const q0 = orientation.w;
+        const q1 = orientation.x;
+        const q2 = orientation.y;
+        const q3 = orientation.z;
+        const yaw = Math.atan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (q2 * q2 + q3 * q3));
+        const yawDegrees = (yaw * 180 / Math.PI).toFixed(1);
+
+        // 立刻更新底部文字坐标
+        poseInfo.innerText = `X: ${position.x.toFixed(2)}m, Y: ${position.y.toFixed(2)}m, Yaw: ${yawDegrees}°`;
+
+        // 🎯 核心：既然箭头在最顶层（物理米级空间），其坐标直接对应 ROS 的物理世界坐标！
+        // 无需通过地图分辨率换算像素，极大地降低了定位偏移的报错率
+        robotMarker.x = position.x;
+        robotMarker.y = -position.y; // Canvas Y 轴与 ROS Y 轴相反，需要取反
+        robotMarker.rotation = -yaw * (180 / Math.PI)+ 90; // 角度旋转取反以适配 canvas
+
+        // 🎯 核心修复：手动让舞台强制刷新重绘画布（否则虽然坐标变了，画面也看不出运动）
+        if (viewer.scene && viewer.scene.update) {
+            viewer.scene.update();
+        }
+    });
+</script>
+</body>
+</html>

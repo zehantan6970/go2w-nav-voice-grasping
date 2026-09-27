@@ -1,0 +1,46 @@
+# Python 快取
+__pycache__/
+*.pyc
+
+# ROS/ROS2 編譯產物
+build/
+devel/
+install/
+log/
+.catkin_workspace
+
+# C++ 編譯產物與二進位檔
+*.o
+*.a
+*.so
+*.out
+
+# 大型模型與地圖快取
+*.engine
+*.onnx
+*.pcd
+
+# 精準排除大型環境安裝包
+Miniconda3-latest-Linux-x86_64.sh
+Miniforge3-Linux-aarch64.sh
+
+# 排除宇樹機器人產生的巨型日誌檔與目錄
+*.log
+logs/
+bin/logs/
+
+# 排除備份壓縮檔
+*.zip
+*.tar.gz
+*.tgz
+
+
+# 密鑰與敏感配置（防止洩露）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 機器人私有資料目錄（含設備身份、令牌、會話日誌）
+openclaw_dot/

@@ -1,0 +1,1 @@
+cmd_/home/unitree/lab/start/aic8800dc/drivers/aic8800/aic8800_fdrv/modules.order := {   echo /home/unitree/lab/start/aic8800dc/drivers/aic8800/aic8800_fdrv/aic8800_fdrv.ko; :; } | awk '!x[$$0]++' - > /home/unitree/lab/start/aic8800dc/drivers/aic8800/aic8800_fdrv/modules.order

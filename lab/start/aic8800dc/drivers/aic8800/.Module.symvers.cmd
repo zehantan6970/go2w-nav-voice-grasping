@@ -1,0 +1,1 @@
+cmd_/home/unitree/lab/start/aic8800dc/drivers/aic8800/Module.symvers := sed 's/ko$$/o/' /home/unitree/lab/start/aic8800dc/drivers/aic8800/modules.order | scripts/mod/modpost -m  -E  -o /home/unitree/lab/start/aic8800dc/drivers/aic8800/Module.symvers -e -i Module.symvers   -T -

@@ -1,0 +1,54 @@
+B2:
+  network_interface: "eth0"       #eth0/enp2s0/wlxfc221c3f66c8
+  lidar_type: "robosense32"       #robosense32/xt16
+  lidar_ysn: "47PGO440010032"     #47PGO440010032 AW3HFG53903HFI51
+  lidar_ip: "192.168.124.20"      #192.168.123.20/192.168.124.20
+  odom_topic: "rt/dog_odom"       #
+  imu_topic: "rt/dog_imu_raw"     #
+  time_out_seconds: 60            #
+
+B2_W:
+  network_interface: "eth0"       #eth0/enp2s0/wlxfc221c3f66c8
+  lidar_type: "robosense32"       #robosense32/xt16
+  lidar_ysn: "47PGO440010032"     #47PGO440010032 AW3HFG53903HFI51
+  lidar_ip: "192.168.124.20"      #192.168.123.20/192.168.124.20
+  odom_topic: "rt/dog_odom"       #
+  imu_topic: "rt/dog_imu_raw"     #
+  time_out_seconds: 60            #
+
+Go2:
+  network_interface: "eth0"       #eth0/enp2s0/wlxfc221c3f66c8
+  lidar_type: "mid360"            #mid360/xt16
+  lidar_ysn: "47PGQ8I0032265"     #47PGO440010032 AW3HFG53903HFI51
+  lidar_ip: "192.168.123.20"      #192.168.123.20/192.168.124.20
+  odom_topic: "rt/dog_odom"       #
+  imu_topic: "rt/dog_imu_raw"     #
+  time_out_seconds: 30            #  
+
+Go2_W:
+  network_interface: "eth0"       #eth0/enp2s0/wlxfc221c3f66c8
+  lidar_type: "mid360"            #mid360/xt16
+  lidar_ysn: "47PFQ8I0032265"     #47PGO440010032 AW3HFG53903HFI51
+  lidar_ip: "192.168.123.20"      #192.168.123.20/192.168.124.20
+  odom_topic: "rt/dog_odom"       #
+  imu_topic: "rt/dog_imu_raw"     #
+  time_out_seconds: 30            #  
+
+G1:
+  network_interface: "eth0"       #eth0/enp2s0/wlxfc221c3f66c8
+  lidar_type: "mid360"            #mid360
+  lidar_ysn: "47PGO440010032"     #47PGO440010032 AW3HFG53903HFI51
+  lidar_ip: "192.168.123.120"     #192.168.123.20/192.168.124.20
+  odom_topic: "rt/dog_odom"       #
+  imu_topic: "rt/dog_imu_raw"     #
+  time_out_seconds: 30            #  
+
+H1:
+  network_interface: "eth0"       #eth0/enp2s0/wlxfc221c3f66c8
+  lidar_type: "mid360"            #mid360
+  lidar_ysn: "47PGO440010032"     #47PGO440010032 AW3HFG53903HFI51
+  lidar_ip: "192.168.123.20"      #192.168.123.20/192.168.124.20
+  odom_topic: "rt/dog_odom"       #
+  imu_topic: "rt/dog_imu_raw"     #
+  time_out_seconds: 30            #  
+

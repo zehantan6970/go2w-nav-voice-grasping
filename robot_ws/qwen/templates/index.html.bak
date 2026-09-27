@@ -1,0 +1,3333 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:color="http://www.w3.org/1999/xhtml">
+<head>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <meta charset="utf-8">
+    <title>具身智能实验室机器人云平台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --sidebar-bg: rgba(20, 20, 20, 0.8);
+            --accent-color: #3e7bfa;
+            --text-main: #ffffff;
+            --text-dim: #a0a0a0;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            margin: 0; display: flex; height: 100vh; overflow: hidden;
+        }
+
+        /* 侧边栏：毛玻璃效果 */
+        #sidebar {
+            width: 220px; background: var(--sidebar-bg); backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 30px 20px;
+        }
+        #sidebar h2 { font-size: 14px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 40px; text-transform: uppercase; }
+        #sidebar button {
+            width: 100%; padding: 12px; margin-bottom: 8px; cursor: pointer;
+            background: transparent; color: var(--text-dim); border: none;
+            border-radius: 8px; text-align: left; transition: all 0.3s ease; font-weight: 400;
+        }
+        #sidebar button:hover { background: rgba(255,255,255,0.05); color: #fff; }
+        #sidebar button.active { background: var(--accent-color); color: #fff; font-weight: 600; }
+
+        #page-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* 内容区 — 全宽，移除聊天窗口后独占 */
+        #main-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+
+
+        /* 强制所有页面默认隐藏 */
+        .page {
+            display: none !important;
+            min-height: 100%;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        /* 只有 active 类才显示 */
+        .page.active {
+            display: flex !important;
+            flex-direction: column;
+        }
+
+        h3 { font-weight: 400; color: var(--text-dim); margin-bottom: 20px; }
+        .val { color: var(--accent-color); font-weight: 600; font-family: monospace; }
+
+        /* 摄像头网格 */
+        .camera-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .camera-box { background: #000; position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color); aspect-ratio: 16/9; }
+        .camera-stream {width: 100%;height: 100%;object-fit: cover;display: block;}
+        .toggle-btn { position: absolute; top: 15px; right: 15px; border-radius: 20px; padding: 6px 12px; border: none; font-size: 10px; text-transform: uppercase; cursor: pointer; }
+        .off { background: rgba(255,255,255,0.1); color: #aaa; }
+
+        /* 表格优化 */
+        table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
+        th { color: var(--text-dim); font-weight: 400; padding-bottom: 10px; }
+        td { padding: 15px; background: rgba(255,255,255,0.02); }
+        tr td:first-child { border-radius: 8px 0 0 8px; }
+        tr td:last-child { border-radius: 0 8px 8px 0; }
+
+        /* 按钮与UI元素 */
+        button { cursor: pointer; transition: 0.2s; border-radius: 6px; border: none; padding: 8px 16px; }
+        button:hover { opacity: 0.8; }
+
+        /* 终端样式 */
+        #ubuntu-terminal, #openclaw-terminal { height: 500px; border-radius: 12px; overflow: hidden; }
+
+        #toggle-handle {
+            position: fixed;
+            top: 150px;
+            right: 0;
+            width: 35px;
+            height: 40px;
+            background: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px 0 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1001;
+            color: white;
+            transition: right 0.3s ease;
+        }
+
+        /* 当侧边栏打开时，将图标向左移，腾出位置 */
+        #right-sidebar.open + #toggle-handle, /* 如果在HTML中紧邻 */
+        body:has(#right-sidebar.open) #toggle-handle {
+            right: 160px; /* 侧边栏的宽度是多少，这里就设置多少 */
+        }
+
+        /* 确保侧边栏本身的样式 */
+        #right-sidebar {
+            position: fixed;
+            top: 150px;
+            right: -160px; /* 彻底隐藏的距离 */
+            width: 160px;
+            transition: right 0.3s ease;
+            z-index: 1000;
+        }
+
+        #right-sidebar.open {
+            right: 0;
+        }
+
+        /* 顶部工具栏：使用深色卡片感 */
+        .editor-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #111;
+            padding: 16px 24px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* 现代输入框 */
+        .modern-input {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            outline: none;
+            transition: border 0.3s;
+        }
+        .modern-input:focus { border-color: var(--accent-color); }
+
+        /* 任务内容区域 */
+        .editor-main {
+            display: grid;
+            grid-template-columns: 350px 1fr; /* 左侧列表，右侧地图 */
+            gap: 20px;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* 侧边列表卡片 */
+        .point-list-card {
+            background: #111;
+            border-radius: 16px;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* 按钮样式 */
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* 监控面板的容器 */
+        .monitoring-dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* 这里决定了并排，1fr 1fr 表示各占一半 */
+            gap: 20px; /* 卡片之间的间距 */
+            margin-bottom: 20px;
+        }
+
+        /* 确保电压和 IMU 的卡片样式统一 */
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        /* --- 修复弹窗显示问题 --- */
+        /* 确保只有被 JS 控制的弹窗才会显示，防止 CSS 意外覆盖 */
+        #task-config-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+        }
+
+        /* 当 JS 将 display 设置为 flex 时，它才会显示 */
+        #task-config-modal[style*="display: flex"] {
+            display: flex !important;
+        }
+
+        .modal-content {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 16px;
+            width: 350px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        /* 确保地图容器是相对定位，标点才能基于此绝对定位 */
+        #map-interaction-area {
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #000;
+            display: flex;
+        }
+
+        #map-interaction-area canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        /* 强制标点始终在最上层 */
+        .map-marker {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: #00e676;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000 !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+
+            /* 居中显示数字 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+
+            /* 允许点击标点进行后续操作 */
+            pointer-events: auto !important;
+        }
+
+        /* 悬停效果，增加交互感 */
+        .map-marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background-color: #fff;
+            border-color: #00e676;
+        }
+
+        /* --- 地图页样式优化 --- */
+        #map-page {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        /* 优化下拉菜单 */
+        #map-select {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border: 1px solid var(--border-color);
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            width: 300px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        #map-select:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--accent-color);
+        }
+
+        /* 优化地图容器高度 */
+        #map-view-container {
+            flex-grow: 1;
+            min-height: 600px;
+            background: #000;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* 强制覆盖下拉菜单样式 */
+        select {
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            outline: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        select option {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+
+        /* 任务列表容器 */
+        .task-list-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        #task-editor-view {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* 任务卡片样式 */
+        .task-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+        }
+
+        .task-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(62, 123, 250, 0.3);
+        }
+
+        .task-info h4 { margin: 0; color: #fff; font-size: 16px; }
+        .task-info p { margin: 4px 0 0; color: #888; font-size: 12px; }
+
+        /* 操作栏按钮样式 */
+        .task-actions { display: flex; gap: 8px; }
+        .btn-icon {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ccc;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-icon:hover { background: var(--accent-color); color: white; border-color: transparent; }
+
+        /* 坐标文本颜色 */
+        .coord-text {
+            font-family: 'Courier New', Courier, monospace; /* 等宽字体看数字更清晰 */
+            color: #555;
+            font-weight: bold;
+        }
+
+        /* 电机卡片网格容器 */
+        .motor-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            max-height: 130px;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .motor-grid.expanded {
+            max-height: 600px;
+        }
+
+        /* 单个电机卡片 */
+        .motor-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            transition: all 0.3s ease;
+        }
+
+        /* 异常状态高亮 */
+        .motor-card.lost {
+            border-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        /* 字体排版 */
+        .motor-card .id { font-size: 18px; font-weight: bold; color: var(--accent-color); margin-bottom: 5px; }
+        .motor-card .data-row { display: flex; justify-content: space-between; font-size: 11px; margin: 2px 0; }
+        .motor-card .label { color: #888; }
+
+        /* 路径点位列表容器 */
+        #sub-task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* 单个点位卡片 */
+        .point-row {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: background 0.2s;
+        }
+
+        .point-row:hover { background: rgba(255, 255, 255, 0.08); }
+
+        /* 序号徽章 */
+        .point-index {
+            background: var(--accent-color);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* 坐标样式 */
+        .point-coord {
+            font-family: 'Courier New', monospace;
+            color: #888;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        /* 按钮微调 */
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+
+        .zoom-wrapper {
+            position: relative;
+            border-radius: 12px;
+            background: #000;
+            height: 200px;
+            overflow: hidden;
+        }
+
+        .mode-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-dim);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .mode-btn.active {
+            background: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(62, 123, 250, 0.4);
+        }
+
+        .map-stream {
+            width: 100%;
+            height: 500px;
+            border: none;
+            overflow: hidden;
+            transform: scale(0.9);
+            transform-origin: top left;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .overlay img {
+            max-width: 90%;
+            max-height: 90%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #wiz-mic-sel, #wiz-spk-sel {
+            width: 250px;
+            max-width: 250px;
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 500; display: inline-block; }
+        .badge-ok { background: #238636; color: #fff; }
+        .badge-err { background: #da3633; color: #fff; }
+        .badge-warn { background: #9e6a03; color: #fff; }
+        .badge-info { background: #1f6feb; color: #fff; }
+        .badge-idle { background: rgba(255,255,255,0.1); color: #ccc; }
+
+        .msg { max-width: 90%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; word-break: break-word; margin-bottom: 6px; animation: aiFadeIn .2s; }
+        @keyframes aiFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        .msg.user { align-self: flex-end; background: #1f6feb; color: #fff; border-bottom-right-radius: 4px; }
+        .msg.ai { align-self: flex-start; background: rgba(255,255,255,0.04); border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.08); }
+        .msg.sys { align-self: center; color: #888; font-size: 11px; background: transparent; padding: 4px; }
+        .msg .label { font-size: 11px; margin-bottom: 2px; opacity: .6; }
+        .msg.ai .label { color: #58a6ff; opacity: 1; }
+        .msg .streaming { font-style: italic; opacity: .7; }
+
+        .mic-btn.active { background: #1f6feb; border-color: #58a6ff; box-shadow: 0 0 15px rgba(88,166,255,.3); }
+        .mic-btn.active::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #58a6ff; animation: aiPulse 1.5s infinite; }
+        @keyframes aiPulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(1.4); opacity: 0; } }
+
+        .state-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+        .state-dot.idle { background: #888; }
+        .state-dot.listening { background: #3fb950; }
+        .state-dot.thinking { background: #d29922; animation: aiBlink 1s infinite; }
+        .state-dot.responding { background: #bc8cff; animation: aiBlink .6s infinite; }
+        .state-dot.disconnected { background: #f85149; }
+        @keyframes aiBlink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+        /* 設置向導彈窗優化 (限制寬度) */
+        .wizard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: aiFadeIn .3s; }
+        .wizard-overlay.hidden { display: none; }
+        .wizard { background: #161b22; border: 1px solid #30363d; border-radius: 16px; width: 480px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 20px; color: #e6edf3; box-shadow: 0 16px 48px rgba(0,0,0,.4); }
+        .wizard h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; color: #fff; }
+        .dev-section { background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+        .dev-section h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #fff; }
+        .meter-bar { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        .meter-bar .fill { height: 100%; background: #3fb950; width: 0%; }
+        .wizard-cam video { width: 100%; max-height: 140px; object-fit: contain; }
+        .mode-toggle { display: flex; gap: 8px; margin-top: 8px; }
+        .mode-card { flex: 1; padding: 10px; border: 2px solid #30363d; border-radius: 8px; cursor: pointer; font-size: 11px; }
+        .mode-card.selected { border-color: #58a6ff; background: rgba(88,166,255,0.08); }
+        .wake-toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.8); z-index: 11000; padding: 15px 30px; border-radius: 12px; font-size: 20px; font-weight: 700; pointer-events: none; opacity: 0; transition: all 0.3s ease; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+        .wake-toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+        .wake-toast.wake { background: linear-gradient(135deg,#238636,#2ea043); color: #fff; }
+        .wake-toast.sleep { background: linear-gradient(135deg,#9e6a03,#d29922); color: #fff; }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.140.2/build/three.module.js",
+            "three/examples/jsm/": "https://unpkg.com/three@0.140.2/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="toggle-handle" onclick="document.getElementById('right-sidebar').classList.toggle('open')">☰</div>
+    <div id="right-sidebar">
+        <button class="mode-btn" onclick="selectMode(this)">全交互</button>
+        <button class="mode-btn" onclick="selectMode(this)">电脑端</button>
+        <button class="mode-btn" onclick="selectMode(this)">飞书手机端</button>
+        <button class="mode-btn" onclick="selectMode(this)">语音交互</button>
+    </div>
+
+    <nav id="sidebar">
+        <h2>具身智能实验室机器人云平台</h2>
+        <button id="btn-monitor" class="active" onclick="showPage('monitor')">实时监控</button>
+        <button id="btn-map" onclick="showPage('map')">地图查看</button>
+        <button id="btn-tasks" onclick="showPage('tasks')">任务管理</button>
+        <button id="btn-terminal" onclick="showPage('terminal')">机器人终端</button>
+        <button id="btn-openclaw" onclick="showPage('openclaw')">Openclaw 终端</button>
+    </nav>
+    <div id="page-container">
+        <main id="main-content">
+            <div id="monitor-page" class="page active">
+                <div class="section">
+                    <h3>镜头画面</h3>
+                    <div class="camera-container">
+                        <div class="camera-box">
+                            <div class="camera-title">深度相机 1</div>
+                            <img id="stream1" class="camera-stream" alt="">
+                            <button class="toggle-btn off" onclick="toggleSub('cam1', this)">OFF</button>
+                        </div>
+                        <div class="camera-box">
+                            <div class="camera-title">深度相机 2</div>
+                            <img id="stream2" class="camera-stream" alt="">
+                            <button class="toggle-btn off" onclick="toggleSub('cam2', this)">OFF</button>
+                        </div>
+                        <div class="camera-box">
+                            <div class="camera-title">机器狗相机</div>
+                            <img id="stream3" class="camera-stream" alt="">
+                            <button class="toggle-btn off" onclick="toggleSub('cam3', this)">OFF</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h3>巡航路线</h3>
+                    <button onclick="refreshRviz()" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                        刷新
+                    </button>
+                    <div class="map-container">
+                        <iframe id="rviz-iframe"
+                                src=""
+                                class="map-stream"
+                                style="width: 105%; height: 800px; border: none;">
+                        </iframe>
+                    </div>
+                </div>
+                <div class="section">
+                    <h3>系统状态</h3>
+                    <div class="monitoring-dashboard">
+                        <div class="dashboard-card">
+                            <p>电压: <span id="v" class="val">-</span> V | 电流: <span id="a" class="val">-</span> A</p>
+                            <p>电池 SoC: <span id="soc" class="val">-</span>% | NTC: <span id="ntc1" class="val">-</span>°C</p>
+                            <p>Tick: <span id="tick" class="val">-</span></p>
+
+                            <div class="volume-control-wrapper">
+                                <button id="mute-btn" onclick="toggleMute()" class="icon-btn">音量</button>
+
+                                <input type="range" id="volume-slider" min="0" max="100" value="50"
+                                       oninput="updateVolumeLabel(this.value)"
+                                       onchange="sendVolumeCommand(this.value)">
+
+                                <span id="volume-val">50%</span>
+                            </div>
+                        </div>
+                        <div class="dashboard-card">
+                            <p>姿态 (Quat): <span id="imu_quat" class="val">0,0,0,1</span></p>
+                            <p>角速度 (Gyro): <span id="imu_gyro" class="val">0,0,0</span></p>
+                            <p>线加速度 (Accel): <span id="imu_acc" class="val">0,0,0</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>电机详细数据</h3>
+                        <button id="toggle-motor-btn" onclick="toggleMotorDisplay()" style="background:transparent; border:1px solid #444; color:#888;">展开全部</button>
+                    </div>
+                    <div id="motor-grid" class="motor-grid"></div>
+                </div>
+            </div>
+
+            <div id="map-page" class="page">
+                <h3>地图选择 (2D 正交视图)</h3>
+                <select id="map-select" onchange="loadMapToContainer(this.value, 'map-view-container')">
+                    <option value="">-- 请选择地图 --</option>
+                </select>
+                <div id="map-view-container"></div>
+            </div>
+
+            <div id="tasks-page" class="page">
+                <div id="task-list-view">
+                    <div class="editor-toolbar" style="background:transparent; padding:0; border:none;">
+                        <h3>任务管理中心</h3>
+                        <button onclick="openEditor(null)" class="btn-primary">+ 新增任务</button>
+                    </div>
+                    <div id="task-main-table-container"></div>
+                </div>
+
+                <div id="task-editor-view">
+                    <div class="editor-toolbar">
+                        <div>
+                            <input type="text" id="edit-task-name" class="modern-input" placeholder="输入任务名称...">
+                            <select id="edit-task-type" class="modern-input" style="margin-left: 10px;">
+                                <option value="巡逻">巡逻</option>
+                                <option value="取放">取放</option>
+                                <option value="导赏">导赏</option>
+                            </select>
+
+                            <select id="edit-task-operation-mode" class="modern-input" style="margin-left: 10px;" onchange="toggleTaskOperationMode(this.value)">
+                                <option value="mark">标点模式</option>
+                                <option value="select">选点模式</option>
+                            </select>
+                        </div>
+                        <select id="editor-map-select" onchange="handleMapChange(this.value)">
+                            <option value="">-- 选择编辑地图 --</option>
+                        </select>
+                        <div style="display:flex; gap: 10px;">
+                            <button onclick="closeEditor()" class="icon-btn"><i data-lucide="x"></i> 取消</button>
+                            <button onclick="saveTask()" class="btn-primary"><i data-lucide="check"></i> 保存任务</button>
+                        </div>
+                    </div>
+
+                    <div class="editor-main">
+                        <div class="point-list-card">
+                            <h4 style="margin-top:0;">路径点位</h4>
+                            <div id="sub-task-list"></div>
+                        </div>
+
+                        <div id="map-interaction-area" style="border-radius: 16px; position: relative;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="terminal-page" class="page">
+                <h3>机器人控制终端 (Ubuntu)</h3>
+                <div id="ubuntu-terminal"></div>
+            </div>
+
+            <div id="openclaw-page" class="page">
+                <h3>Openclaw 控制台</h3>
+                <div id="openclaw-terminal"></div>
+            </div>
+        </main>
+    </div>
+    <div id="task-start-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:#1a1a1a; padding:30px; border-radius:12px; border:1px solid #444; width:300px; text-align:center;">
+            <h3 style="margin-top:0; color:#fff;">请选择任务模式</h3>
+            <p style="color:#aaa; font-size:14px;">即将启动任务，请选择运行模式</p>
+
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:20px;">
+                <button onclick="window.selectAndStartTask('marking')" style="padding:12px; background:#3e7bfa; border:none; color:white; border-radius:6px; cursor:pointer;">标点模式 (标准导航)</button>
+                <button onclick="window.selectAndStartTask('selection')" style="padding:12px; background:#e91e63; border:none; color:white; border-radius:6px; cursor:pointer;">选点模式 (带动作路径)</button>
+                <button onclick="document.getElementById('task-start-modal').style.display='none'" style="padding:10px; background:transparent; border:1px solid #444; color:#888; cursor:pointer; margin-top:10px;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+        (function() {
+            if (!window.scene) {
+                window.scene = new THREE.Scene();
+            }
+            if (!window.renderer) {
+                window.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                window.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        })();
+
+        // 配置后端 IP (请确保此处 IP 与你的 server.py 运行环境一致)
+        const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
+
+        // 初始化 SocketIO
+        const socket = io(BACKEND_URL);
+
+        function safeSetText(id, value, fallback = '') {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value || fallback;
+            } else {
+                console.warn(`[UI Warning] 页面缺少元素 ID: ${id}，无法设置值: ${value}`);
+            }
+        }
+
+        function sendTestCommand(type, deviceId) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: "test_device",
+                    device_type: type, // "mic", "speaker", "cam"
+                    device_id: deviceId
+                }));
+                console.log(`[向导] 发送测试指令: ${type}, ID: ${deviceId}`);
+            } else {
+                alert("WebSocket 未连接，无法测试硬件！");
+            }
+        }
+
+        window.refreshRviz = () => {
+            const iframe = document.getElementById('rviz-iframe');
+            if (iframe) {
+                // 保存当前的 src
+                const currentSrc = iframe.src;
+                // 简单粗暴的刷新方式：重置 src
+                console.log("[UI] 正在刷新巡航路线 iframe...");
+                iframe.src = "";
+                setTimeout(() => {
+                    iframe.src = currentSrc;
+                }, 100); // 给一点点延迟，确保重载
+            } else {
+                console.error("[UI Error] 未找到 rviz-iframe 元素");
+            }
+        };
+
+        function truncateText(fullText, limit = 20) {
+            if (fullText.length <= limit) return fullText;
+            return fullText.substring(0, 10) + "..." + fullText.substring(fullText.length - 8);
+        }
+
+        function updateDeviceList(selectId, devices) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = ''; // 清空
+
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.id;
+                option.textContent = truncateText(device.name || device.id);
+                option.title = device.id;
+
+                select.appendChild(option);
+            });
+        }
+
+        window.stopAllStreams = () => {
+            const streamIds = ['stream1', 'stream2', 'stream3'];
+            streamIds.forEach(id => {
+                const img = document.getElementById(id);
+                if (img) {
+                    img.src = "";
+                }
+            });
+
+            document.querySelectorAll('.camera-box .toggle-btn').forEach(btn => {
+                btn.classList.remove('on');
+                btn.classList.add('off');
+                btn.innerText = 'OFF';
+            });
+            console.log("[UI] 所有视频流连接已强制关闭");
+        };
+
+        window.toggleChatWindow = (isVisible) => {
+            const chatWindow = document.getElementById('chat-window');
+            if (chatWindow) {
+                chatWindow.style.display = isVisible ? 'flex' : 'none';
+                setTimeout(() => {
+                    window.updateMapResolution();
+                }, 50);
+            }
+        };
+
+        window.clearScene = () => {
+            console.log("[Global] 正在执行全场景清理...");
+            const toRemove = [];
+            window.scene.children.forEach((obj) => {
+                // 只要是 Sprite 或 Points，统统加入删除队列
+                if (obj.isSprite || obj.isPoints) {
+                    toRemove.push(obj);
+                }
+            });
+
+            toRemove.forEach((obj) => {
+                window.scene.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                    if (obj.material.map) obj.material.map.dispose();
+                }
+            });
+            console.log(`[Global] 清理完成，移除了 ${toRemove.length} 个对象。`);
+        };
+
+        window.reparentRenderer = (targetContainerId) => {
+            const container = document.getElementById(targetContainerId);
+            if (!container) return;
+
+            // 如果已经在当前容器中，直接返回
+            if (renderer.domElement.parentElement === container) {
+                window.updateMapResolution(); // 确保尺寸正确
+                return;
+            }
+
+            // 移动 Canvas
+            container.appendChild(renderer.domElement);
+            console.log(`[Renderer] 已将 Canvas 移动到: ${targetContainerId}`);
+
+            // 强制触发一次尺寸更新
+            window.updateMapResolution();
+        };
+
+        // 页面切换
+        window.showPage = (pageName) => {
+            const activePage = document.querySelector('.page.active');
+            if (activePage && activePage.id === 'monitor-page' && pageName !== 'monitor') {
+                window.stopAllStreams();
+            }
+
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+            });
+
+            document.querySelectorAll('#sidebar button').forEach(b => {
+                b.classList.remove('active');
+            });
+
+            const target = document.getElementById(pageName + '-page');
+            if (target) {
+                target.classList.add('active');
+            }
+
+            const btn = document.getElementById('btn-' + pageName);
+            if (btn) {
+                btn.classList.add('active');
+            }
+
+            if (pageName === 'tasks') {
+                const listView = document.getElementById('task-list-view');
+                const editorView = document.getElementById('task-editor-view');
+
+                if (listView) listView.style.display = 'block';
+                if (editorView) editorView.style.display = 'none';
+            }
+
+            if (pageName === 'map' && typeof renderer !== 'undefined') {
+                window.clearScene();
+                window.reparentRenderer('map-view-container');
+                setTimeout(() => {
+                    const cont = document.getElementById('map-view-container');
+                    if (cont) {
+                        renderer.setSize(cont.clientWidth, cont.clientHeight);
+                        camera.aspect = cont.clientWidth / cont.clientHeight;
+                        camera.updateProjectionMatrix();
+                    }
+                }, 100);
+            }
+        };
+
+        // --- 摄像头控制逻辑 ---
+        window.toggleSub = (camId, btn) => {
+            btn.classList.toggle('on');
+            btn.classList.toggle('off');
+            const isActive = btn.classList.contains('on');
+            btn.innerText = isActive ? 'ON' : 'OFF';
+            const img = document.getElementById(camId === 'cam3' ? 'stream3' : (camId === 'cam2' ? 'stream2' : 'stream1'));
+            img.src = isActive ? `${BACKEND_URL}/video_feed/${camId}` : "";
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const iframe = document.getElementById('rviz-iframe');
+            const dynamicSrc = `${BACKEND_URL}/lab/all/go2.html`;
+
+            // 加载前设置一个占位提示或样式
+            iframe.style.opacity = '0';
+            iframe.style.transition = 'opacity 0.3s ease';
+
+            console.log("正在加载 iframe 地址:", dynamicSrc);
+            iframe.src = dynamicSrc;
+
+            // 当 iframe 加载完成时，渐显出来
+            iframe.onload = () => {
+                iframe.style.opacity = '1';
+                console.log("地图加载完成");
+            };
+
+            // 错误处理：如果地址错误，给予反馈
+            iframe.onerror = () => {
+                console.error("无法加载地图页面");
+                iframe.srcdoc = "<div style='color:red; padding:20px;'>地图加载失败，请检查网络或后端服务。</div>";
+            };
+        });
+
+        // --- 遥测数据处理 (SocketIO 接收) ---
+        socket.on('telemetry_data', (msg) => {
+
+            try {
+                if (msg.power_v !== undefined) {
+                    document.getElementById('v').innerText = (msg.power_v || 0).toFixed(2);
+                    document.getElementById('a').innerText = (msg.power_a || 0).toFixed(2);
+                    document.getElementById('soc').innerText = msg.bms_state?.soc || 0;
+                    document.getElementById('ntc1').innerText = msg.temperature_ntc1 || 0;
+                    document.getElementById('tick').innerText = msg.tick || 0;
+                } else {
+                    console.warn("未找到基础数据字段");
+                }
+
+                if (msg.imu_state) {
+                    document.getElementById('imu_quat').innerText = msg.imu_state.quaternion?.map(x => x.toFixed(3)).join(', ') || '-';
+                    document.getElementById('imu_gyro').innerText = msg.imu_state.gyroscope?.map(x => x.toFixed(3)).join(', ') || '-';
+                    document.getElementById('imu_acc').innerText = msg.imu_state.accelerometer?.map(x => x.toFixed(3)).join(', ') || '-';
+                }
+
+                // 3. 更新电机表数据
+                if (msg.motor_state && Array.isArray(msg.motor_state)) {
+                    msg.motor_state.forEach((m, i) => {const card = document.getElementById(`m${i}-card`);
+                        if (!card) return;
+                        if (m.lost !== 0) card.classList.add('lost');
+                        else card.classList.remove('lost');
+
+                        document.getElementById(`m${i}-q`).innerText = m.q.toFixed(2);
+                        document.getElementById(`m${i}-dq`).innerText = m.dq.toFixed(2);
+                        document.getElementById(`m${i}-tau`).innerText = m.tau_est.toFixed(2);
+                        document.getElementById(`m${i}-temp`).innerText = m.temperature + '°C';
+                    });
+                }
+
+            } catch (err) {
+                console.error("!!! 更新数据时发生错误:", err);
+            }
+        });
+
+        // 初始化电机表
+        const grid = document.getElementById('motor-grid');
+        for (let i = 0; i < 16; i++) {
+            grid.innerHTML += `
+                <div class="motor-card" id="m${i}-card">
+                    <div class="id">M${i}</div>
+                    <div class="data-row"><span class="label">位置</span><span id="m${i}-q">-</span></div>
+                    <div class="data-row"><span class="label">速度</span><span id="m${i}-dq">-</span></div>
+                    <div class="data-row"><span class="label">扭矩</span><span id="m${i}-tau">-</span></div>
+                    <div class="data-row"><span class="label">温度</span><span id="m${i}-temp">-</span></div>
+                </div>
+            `;
+        }
+
+        window.toggleMotorDisplay = () => {
+            const grid = document.getElementById('motor-grid');
+            const btn = document.getElementById('toggle-motor-btn');
+            grid.classList.toggle('expanded');
+            btn.innerText = grid.classList.contains('expanded') ? '收回' : '展开全部';
+        };
+
+        // 音量调节逻辑
+        let isMuted = false;
+
+        window.updateVolumeLabel = (val) => {
+            document.getElementById('volume-val').innerText = val + "%";
+        };
+
+        window.sendVolumeCommand = (val) => {
+            console.log("发送音量设置:", val);
+            socket.emit('volume_control', { volume: val });
+        };
+
+        window.toggleMute = () => {
+            isMuted = !isMuted;
+            const btn = document.getElementById('mute-btn');
+            btn.innerText = isMuted ? '静音' : '音量';
+            socket.emit('mute_toggle', { muted: isMuted });
+        };
+
+        let currentMuted = false;
+
+        socket.on('audio_status_update', (data) => {
+            console.log("收到音频状态同步:", data);
+
+            const slider = document.getElementById('volume-slider');
+            const valSpan = document.getElementById('volume-val');
+            slider.value = data.volume;
+            valSpan.innerText = data.volume + "%";
+            currentMuted = data.muted;
+            const btn = document.getElementById('mute-btn');
+            btn.innerText = currentMuted ? '静音' : '音量';
+        });
+
+        window.openImage = (src) => {
+            const overlay = document.getElementById('image-overlay');
+            const overlayImg = document.getElementById('overlay-img');
+            overlayImg.src = src;
+            overlay.style.display = 'flex';
+        };
+
+        window.closeImage = () => {
+            document.getElementById('image-overlay').style.display = 'none';
+        };
+
+        socket.on('connect', () => {
+            const lastDevice = localStorage.getItem('lastAudioDevice');
+            if (lastDevice) {
+                socket.emit('set_audio_device', { device: lastDevice });
+            }
+            console.log("WebSocket 连接成功，请求音频状态...");
+            socket.emit('request_audio_status', {});
+            socket.emit('request_history', { id: 'ubuntu' });
+            socket.emit('request_history', { id: 'openclaw' });
+        });
+
+        // --- 地图渲染 ---
+        const cont = document.getElementById('map-view-container');
+        const scene = new THREE.Scene();
+        window.scene = scene || window.scene || new THREE.Scene();
+        window.renderer = window.renderer || new THREE.WebGLRenderer({ antialias: true });
+        scene.background = new THREE.Color(0x000000);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 50, 50);
+        camera.up.set(0, 0, -1);
+        camera.lookAt(0, 0, 0);
+        cont.appendChild(renderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableRotate = false;
+        controls.enablePan = true;
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        document.getElementById('map-select').onchange = (e) => {
+            if (!e.target.value) return;
+
+            // 显式确保使用全局场景
+            if (!window.scene) {
+                console.error("全局 window.scene 不存在！");
+                return;
+            }
+
+            // 2. 正确的清理逻辑：先收集，再删除
+            const toRemove = [];
+            scene.traverse(obj => {
+                if (obj instanceof THREE.Points && obj.name !== 'task-marker') {
+                    toRemove.push(obj);
+                }
+            });
+
+            // 遍历删除并释放内存
+            toRemove.forEach(obj => {
+                scene.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    // 如果材质是数组，则需遍历释放
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+
+            // 3. 加载新地图
+            new PCDLoader().load(`${BACKEND_URL}/map/${e.target.value}`, (pts) => {
+                pts.rotation.x = -Math.PI / 2;
+                pts.material.color.set(0xffffff);
+                pts.material.size = 0.1;
+                pts.material.sizeAttenuation = true;
+
+                window.scene.add(pts);
+
+                pts.geometry.computeBoundingSphere();
+                if (pts.geometry.boundingSphere) {
+                    const c = pts.geometry.boundingSphere.center;
+                    camera.position.set(c.x, c.y + 50, c.z);
+                    camera.lookAt(c.x, c.y, c.z);
+                    controls.target.set(c.x, c.y, c.z);
+                    controls.update();
+                }
+            }, undefined, (err) => {
+                console.error("加载地图失败:", err);
+            });
+        };
+
+        const populateMapDropdowns = (files) => {
+            const selectIds = ['map-select', 'editor-map-select'];
+
+            selectIds.forEach(id => {
+                const selectElement = document.getElementById(id);
+                if (!selectElement) return;
+
+                selectElement.innerHTML = '<option value="">-- 请选择地图 --</option>';
+
+                files.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f;
+                    opt.innerText = f;
+                    selectElement.appendChild(opt);
+                });
+            });
+        };
+
+        fetch(`${BACKEND_URL}/files`)
+            .then(r => r.json())
+            .then(files => {
+                populateMapDropdowns(files);
+            })
+            .catch(err => console.error("获取地图列表失败:", err));
+
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+        animate();
+
+        // --- 终端逻辑 ---
+        const termUbuntu = new Terminal({ fontSize: 14, theme: { background: '#000' } });
+        const termOpenclaw = new Terminal({ fontSize: 14, theme: { background: '#000' } });
+        termUbuntu.open(document.getElementById('ubuntu-terminal'));
+        termOpenclaw.open(document.getElementById('openclaw-terminal'));
+
+        socket.on('output', (data) => {
+            if (data.id === 'ubuntu') termUbuntu.write(data.data);
+            if (data.id === 'openclaw') termOpenclaw.write(data.data);
+        });
+
+        socket.on('disconnect', () => {
+            console.warn("⚠️ WebSocket 断开连接");
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error("❌ 连接错误:", err.message);
+        });
+
+        termUbuntu.onData(data => {
+            console.log("前端尝试发送输入:", JSON.stringify(data));
+            socket.emit('input', { id: 'ubuntu', command: data });
+        });
+        termOpenclaw.onData(data => { socket.emit('input', { id: 'openclaw', command: data }); });
+
+        window.selectMode = (clickedBtn) => {
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            clickedBtn.classList.add('active');
+
+            const modeMap = {
+                "全交互": "all",
+                "电脑端": "terminal",
+                "飞书手机端": "feishu",
+                "语音交互": "voice"
+            };
+
+            const modeKey = modeMap[clickedBtn.innerText];
+            console.log("正在尝试切换至模式:", modeKey);
+
+            socket.emit('switch_mode', { mode: modeKey });
+        };
+
+        socket.on('mode_status', (data) => {
+            if (data.status === 'success') {
+                console.log("模式切换成功:", data.message);
+            } else {
+                alert("切换失败: " + data.message);
+            }
+        });
+
+        window.loadMapToContainer = (mapFileName, containerId) => {
+            console.log("[Debug] loadMapToContainer 开始执行，正在清理场景...");
+            console.log(containerId)
+
+            if (!window.scene) window.scene = new THREE.Scene();
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            // 1. 收集所有要删除的对象 (先收集，后删除，防止数组索引偏移)
+            const toRemove = [];
+            window.scene.children.forEach((obj) => {
+                if (obj.name === 'task-marker' || obj.isPoints) {
+                    toRemove.push(obj);
+                }
+            });
+
+            // 2. 执行删除
+            toRemove.forEach((obj) => {
+                window.scene.remove(obj);
+
+                // 销毁几何体/材质
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                    if (obj.material.map) obj.material.map.dispose();
+                }
+            });
+
+            console.log(`[Debug] 清理完成，移除了 ${toRemove.length} 个对象。`);
+
+            // 3. 确保 Canvas 挂载
+            if (!container.contains(renderer.domElement)) {
+                container.appendChild(renderer.domElement);
+            }
+
+            new PCDLoader().load(`${BACKEND_URL}/map/${mapFileName}`, (pts) => {
+                pts.rotation.x = -Math.PI / 2;
+                pts.material.size = 0.1;
+                pts.material.sizeAttenuation = true;
+                pts.material.color.set(0xffffff);
+                window.scene.add(pts);
+
+                pts.geometry.computeBoundingSphere();
+                const c = pts.geometry.boundingSphere.center;
+                camera.position.set(c.x, c.y + 50, c.z);
+                camera.lookAt(c.x, c.y, c.z);
+                controls.target.set(c.x, c.y, c.z);
+                controls.update();
+                window.renderMarkersForTask();
+            },
+            undefined,
+            (err) => {
+                console.error("地图加载失败，可能是路径或内存残留问题:", err);
+            });
+        };
+
+        window.updateMapResolution = () => {
+            const container = document.getElementById('map-interaction-area');
+            if (!container) return;
+
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            if (width > 0 && height > 0) {
+                if (typeof camera !== 'undefined') {
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+                }
+                if (typeof renderer !== 'undefined') {
+                    renderer.setSize(width, height);
+                }
+            }
+        };
+
+        window.addEventListener('resize', () => {
+            window.updateMapResolution();
+        });
+
+        // 全局变量区
+        window.allTasks = [];
+        window.editingTask = null;
+        window.tempPoint = null;
+        window.isAddingMode = false;
+        window.taskOperationMode = 'mark';
+        window.selectedPointIndices = [];
+
+        window.toggleTaskOperationMode = (mode) => {
+            window.taskOperationMode = mode;
+            window.selectedPointIndices = [];
+
+            console.log("操作模式已切换为:", mode === 'select' ? "选点模式" : "标点模式");
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        };
+
+        window.updatePointAction = (arrIndex, newAction) => {
+            if (window.selectedPointIndices[arrIndex]) {
+                window.selectedPointIndices[arrIndex].action = newAction;
+                window.renderSubTaskList();
+                console.log(`点位 ${window.selectedPointIndices[arrIndex].index} 已设置为: ${newAction}`);
+            }
+        };
+
+        renderer.domElement.addEventListener('click', (event) => {
+            if (!window.isAddingMode) return;
+
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(
+                (event.offsetX / renderer.domElement.clientWidth) * 2 - 1,
+                -(event.offsetY / renderer.domElement.clientHeight) * 2 + 1
+            );
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(window.scene.children, true);
+            if (intersects.length > 0) {
+                const p = intersects[0].point;
+                window.tempPoint = { x: p.x, y: p.y, z: p.z };
+                document.getElementById('task-config-modal').style.display = 'flex';
+            }
+        });
+
+        window.renderMarkersForTask = () => {
+            const targetScene = window.scene || (typeof scene !== 'undefined' ? scene : null);
+            if (!targetScene) return;
+
+            // 清除旧标点
+            const markersToRemove = [];
+            targetScene.traverse(obj => {
+                if (obj.name === 'task-marker') markersToRemove.push(obj);
+            });
+            markersToRemove.forEach(obj => {
+                targetScene.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+
+            if (window.editingTask && window.editingTask.points) {
+                window.editingTask.points.forEach((p, index) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 64; canvas.height = 64;
+                    const ctx = canvas.getContext('2d');
+
+                    // 根据模式和是否被选中决定颜色
+                    let isSelected = (window.taskOperationMode === 'select' &&
+                          window.selectedPointIndices.some(item => item.index === index));
+                    ctx.fillStyle = isSelected ? '#e91e63' : '#00ff00'; // 选中为粉红色，未选为绿色
+
+                    ctx.beginPath(); ctx.arc(32, 32, 20, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'center';
+                    ctx.fillText((index + 1).toString(), 32, 40);
+
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                    const sprite = new THREE.Sprite(material);
+
+                    sprite.name = 'task-marker';
+                    sprite.userData = { index: index };
+                    sprite.scale.set(2, 2, 1);
+                    sprite.position.set(p.x, 0.5, p.z);
+
+                    targetScene.add(sprite);
+                });
+            }
+        };
+
+        window.editingPointId = null;
+
+        window.updatePointField = (index, field, value) => {
+            const p = window.editingTask.points[index];
+
+            if (p) {
+                p[field] = value;
+                if (field === 'type' && value !== '广播') {
+                    delete p.tts_text;
+                }
+
+                window.renderSubTaskList();
+                window.renderMarkersForTask();
+            }
+        };
+
+        window.savePointType = (pid, newType) => {
+            const p = window.editingTask.points.find(x => x.id === pid);
+            if (p) p.type = newType;
+            window.renderSubTaskList();
+        };
+
+        window.cancelAddPoint = () => {
+            window.isAddingMode = false;
+            const btn = document.getElementById('add-point-btn');
+            if(btn) btn.innerText = "添加任务点";
+            console.log("已取消添加模式");
+        };
+
+        window.closeModal = () => {
+            const modal = document.getElementById('task-config-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                window.isAddingMode = false;
+            }
+        };
+
+        window.taskState = window.taskState || { fileId: null, isRunning: false, isPaused: false };
+
+        window.loadTaskDashboard = async () => {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/get_all_tasks`);
+                if (!response.ok) throw new Error("获取任务列表失败");
+                const tasks = await response.json();
+                window.allTasks = tasks;
+
+                const container = document.getElementById('task-main-table-container');
+                if (!container) return;
+
+                container.innerHTML = `
+                    <div class="task-list-grid">
+                        ${tasks.map(t => {
+                            const isTarget = (window.taskState.fileId === t.file_id);
+                            const isRunning = (isTarget && window.taskState.isRunning);
+                            const isPaused = (isTarget && window.taskState.isPaused);
+
+                            // --- 修改部分：根据运行状态决定是否显示编辑和删除按钮 ---
+                            const editDeleteButtons = !isRunning ? `
+                                <button onclick="openEditor('${t.file_id}')" class="btn-icon"><i data-lucide="edit-2"></i></button>
+                                <button onclick="deleteTask('${t.file_id}')" class="btn-icon" style="color: #f44336;"><i data-lucide="trash-2"></i></button>
+                            ` : '';
+
+                            // 逻辑按钮组判断
+                            let controlButtons = '';
+                            if (!isRunning) {
+                                controlButtons = `<button onclick="handleTaskAction('start_task', '${t.file_id}')" class="btn-icon" style="color: #4caf50;"><i data-lucide="play"></i></button>`;
+                            } else {
+                                const pauseIcon = isPaused ? 'play' : 'pause';
+                                const pauseAction = isPaused ? 'resume_task' : 'pause_task';
+
+                                controlButtons = `
+                                    <button onclick="handleTaskAction('${pauseAction}', '${t.file_id}')" class="btn-icon" style="color: #ff9800;">
+                                        <i data-lucide="${pauseIcon}"></i>
+                                    </button>
+                                    <button onclick="handleTaskAction('stop_task', '${t.file_id}')" class="btn-icon" style="color: #f44336;">
+                                        <i data-lucide="square"></i>
+                                    </button>
+                                `;
+                            }
+
+                            return `
+                            <div class="task-card">
+                                <h4>${t.name}</h4>
+                                <div class="task-actions" style="display: flex; gap: 8px;">
+                                    ${editDeleteButtons}
+                                    ${controlButtons}
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                console.error("加载任务列表出错:", err);
+            }
+        };
+
+        socket.on('task_finished', (data) => {
+            console.log("✅ 收到后端任务结束通知:", data);
+            if (window.taskState.fileId === data.fileId) {
+                window.taskState.fileId = null;
+                window.taskState.isRunning = false;
+                window.taskState.isPaused = false;
+                window.loadTaskDashboard();
+
+                console.log(`任务 [${data.fileId}] 已顺利执行完毕`);
+            }
+        });
+
+        window.loadTaskForMap = async (fileId) => {
+            const cleanId = fileId.replace(/\.pcd$/, '').replace(/\.json$/, '');
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/get_task/${cleanId}`);
+                if (!response.ok) throw new Error("服务器未找到该任务文件");
+                const data = await response.json();
+
+                window.editingTask = {
+                    id: cleanId,
+                    name: data.name || cleanId,
+                    points: (data.points || []).map(p => ({
+                        x: p.x, y: 0.0, z: -(p.y),
+                        type: '广播',
+                        tts_text: p.tts_text || ""
+                    }))
+                };
+
+                const baseMapName = cleanId.replace(/[-_]task$/, '');
+
+                const actualMapName = data.map_name || (baseMapName + '.pcd');
+                window.currentSelectedMap = actualMapName;
+
+                const selectBox = document.getElementById('editor-map-select');
+                if (selectBox) selectBox.value = actualMapName;
+
+                const nameInput = document.getElementById('edit-task-name');
+                if (nameInput) nameInput.value = data.name || cleanId;
+
+                window.loadMapToContainer(actualMapName, 'map-interaction-area');
+
+                window.renderSubTaskList();
+
+            } catch (err) {
+                console.error("加载任务数据失败:", err);
+            }
+        };
+
+        window.resetEditor = () => {
+            window.editingTask = { id: null, name: '', points: [] };
+            window.taskOperationMode = 'mark';
+            window.selectedPointIndices = [];
+
+            const modeSelect = document.getElementById('edit-task-operation-mode');
+            if (modeSelect) {
+                modeSelect.value = 'mark';
+            }
+            window.renderSubTaskList();
+            if (window.scene) {
+                const toRemove = [];
+                window.scene.traverse((obj) => {
+                    if ((obj.userData && obj.userData.isMarker) || obj.name === 'task-marker') {
+                        toRemove.push(obj);
+                    }
+                });
+
+                toRemove.forEach(obj => {
+                    window.scene.remove(obj);
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                        else obj.material.dispose();
+                    }
+                });
+            }
+            console.log("编辑器已彻底清场，并已重置为默认标点模式");
+        };
+
+        window.editorMode = 'new';
+        window.openEditor = async (taskId) => {
+            window.resetEditor();
+            window.toggleChatWindow(false);
+            window.reparentRenderer('map-interaction-area');
+            document.getElementById('task-list-view').style.display = 'none';
+            document.getElementById('task-editor-view').style.display = 'block';
+
+            const selectBox = document.getElementById('editor-map-select');
+            const nameInput = document.getElementById('edit-task-name');
+
+            if (!taskId) {
+                window.editorMode = 'new';
+                if (nameInput) nameInput.value = '';
+                if (selectBox) {
+                    selectBox.value = '';
+                    selectBox.disabled = false;
+                }
+                console.log("进入新增任务模式");
+                return;
+            }
+
+            window.editorMode = 'edit';
+            if (selectBox) {
+                selectBox.disabled = true;
+            }
+            await window.loadTaskForMap(taskId);
+        };
+
+        window.closeEditor = () => {
+            document.getElementById('task-editor-view').style.display = 'none';
+            document.getElementById('task-list-view').style.display = 'block';
+            window.loadTaskDashboard();
+            window.toggleChatWindow(true);
+        };
+
+        document.getElementById('map-interaction-area').addEventListener('click', (e) => {
+            window.updateMapResolution();
+            const rect = e.currentTarget.getBoundingClientRect();
+            camera.aspect = rect.width / rect.height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(rect.width, rect.height);
+            const mouse = new THREE.Vector2();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+
+            if (window.taskOperationMode === 'select') {
+                const markers = scene.children.filter(obj => obj.name === 'task-marker');
+                const intersects = raycaster.intersectObjects(markers, false);
+
+                if (intersects.length > 0) {
+                    const clickedIndex = intersects[0].object.userData.index;
+                    const lastIndex = window.selectedPointIndices.length > 0
+                        ? window.selectedPointIndices[window.selectedPointIndices.length - 1]
+                        : -1;
+
+                    if (clickedIndex !== lastIndex) {
+                        window.selectedPointIndices.push({
+                            index: clickedIndex,
+                            action: 'none',
+                            tts_content: ''
+                        });
+                        window.renderSubTaskList();
+                        window.renderMarkersForTask();
+                    } else {
+                        console.log("该点已是当前路径的最后一步，无需重复添加");
+                    }
+                }
+            } else {
+                raycaster.params.Points.threshold = 0.5;
+                const pointsObj = scene.children.find(obj => obj.type === 'Points');
+
+                if (pointsObj) {
+                    const intersects = raycaster.intersectObject(pointsObj);
+                    if (intersects.length > 0) {
+                        const p = intersects[0].point;
+                        const newPoint = { x: p.x, y: p.y, z: p.z, type: '广播', tts_text: p.tts_text || ""};
+                        window.editingTask.points.push(newPoint);
+                        window.editingPointId = newPoint.id;
+
+                        window.renderSubTaskList();
+                        window.renderMarkersForTask();
+                    } else {
+                        console.warn("点击位置没有点云数据");
+                    }
+                }
+            }
+        });
+
+        window.deletePoint = (index) => {
+            window.editingTask.points.splice(index, 1);
+
+            if (window.editingPointId === index) {
+                window.editingPointId = null;
+            }
+
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        };
+
+        window.removeSelectedPoint = (orderIndex) => {
+            window.selectedPointIndices.splice(orderIndex, 1);
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        };
+
+        window.updatePointTTS = (arrIndex, content) => {
+            if (window.selectedPointIndices[arrIndex]) {
+                window.selectedPointIndices[arrIndex].tts_content = content;
+                console.log(`点位 ${arrIndex + 1} 的 TTS 内容已更新为: ${content}`);
+            }
+        };
+
+        window.renderSubTaskList = () => {
+            const list = document.getElementById('sub-task-list');
+
+            // 1. 选点模式 (Selection Mode)
+            if (window.taskOperationMode === 'select') {
+                if (!window.selectedPointIndices || window.selectedPointIndices.length === 0) {
+                    list.innerHTML = `<div style="text-align:center; padding:20px; color:#555; font-size:12px;">请在右侧地图上点击现有标点<br>规划任务路线</div>`;
+                    return;
+                }
+
+                list.innerHTML = window.selectedPointIndices.map((item, orderIndex) => {
+                    const action = item.action || 'none';
+                    const isBroadcast = (action === '广播');
+
+                    return `
+                        <div class="point-row" style="display:flex; flex-direction:column; gap:8px; padding:8px 0; border-bottom:1px solid #333;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <div class="point-index" style="background:#e91e63; color:white; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px;">
+                                    ${orderIndex + 1}
+                                </div>
+                                <div style="flex-grow:1; font-size:14px;">
+                                    前往 ➔ 标点 <b>#${item.index + 1}</b>
+                                </div>
+                                <select onchange="window.updatePointAction(${orderIndex}, this.value)" style="background:#222; color:white; border:1px solid #444; border-radius:4px; padding:2px;">
+                                    <option value="none" ${action === 'none' ? 'selected' : ''}>无动作</option>
+                                    <option value="广播" ${action === '广播' ? 'selected' : ''}>广播</option>
+                                    <option value="抓取" ${action === '抓取' ? 'selected' : ''}>抓取</option>
+                                    <option value="拍照" ${action === '拍照' ? 'selected' : ''}>拍照</option>
+                                </select>
+                                <button class="btn-sm" style="color:#f44336; background:rgba(255,255,255,0.1); border:none; cursor:pointer;" onclick="removeSelectedPoint(${orderIndex})">移除</button>
+                            </div>
+                            ${isBroadcast ? `
+                                <input type="text" placeholder="输入广播 TTS 内容..."
+                                       value="${item.tts_content || ''}"
+                                       onchange="window.updatePointTTS(${orderIndex}, this.value)"
+                                       style="width: 100%; background:#111; color:#fff; border:1px solid #555; padding:4px; border-radius:4px; font-size:12px; margin-top:4px;">
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+                return;
+            }
+
+            // 2. 原有的编辑模式 (Editing Mode)
+            if (!window.editingTask || !window.editingTask.points || window.editingTask.points.length === 0) {
+                list.innerHTML = `<div style="text-align:center; padding:20px; color:#555; font-size:12px;">暂无路径点，请点击地图添加</div>`;
+                return;
+            }
+
+            list.innerHTML = window.editingTask.points.map((p, i) => {
+                const x = Number(p.x).toFixed(2);
+                const z = Number(p.z).toFixed(2);
+
+                if (window.editingPointId === i) {
+                    return `
+                        <div class="point-row" style="border-color: var(--accent-color); flex-direction: column; align-items: flex-start;">
+                            <div style="display: flex; width: 100%; align-items: center; gap: 8px;">
+                                <div class="point-index">${i + 1}</div>
+                                <select onchange="updatePointField(${i}, 'type', this.value)" style="flex-grow:1;">
+                                    <option value="抓取" ${p.type === '抓取' ? 'selected' : ''}>抓取</option>
+                                    <option value="广播" ${p.type === '广播' ? 'selected' : ''}>广播</option>
+                                    <option value="拍照" ${p.type === '拍照' ? 'selected' : ''}>拍照</option>
+                                </select>
+                                <button class="btn-sm" style="background:#4caf50; color:white;"
+                                        onclick="window.editingPointId = null; renderSubTaskList()">完成</button>
+                            </div>
+                            ${p.type === '广播' ? `
+                                <input type="text" placeholder="输入要广播的内容..." value="${p.tts_text || ''}"
+                                       onchange="updatePointField(${i}, 'tts_text', this.value)"
+                                       style="width: 100%; margin-top: 8px; background: #222; border: 1px solid #444; color: white; padding: 4px;">
+                            ` : ''}
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="point-row">
+                            <div class="point-index" style="background:#444;">${i + 1}</div>
+                            <div style="flex-grow:1; font-size:14px;">
+                                ${p.type}
+                                ${p.type === '广播' ? `(内容: ${(p.tts_text && p.tts_text.length > 8) ? p.tts_text.substring(0, 8) + '...' : (p.tts_text || '无')})` : ''}
+                            </div>
+                            <span class="point-coord">${x}, ${z}</span>
+                            <button class="btn-sm" onclick="window.editingPointId = ${i}; renderSubTaskList()">修改</button>
+                            <button class="btn-sm" style="color:#f44336;" onclick="deletePoint(${i})">删除</button>
+                        </div>
+                    `;
+                }
+            }).join('');
+        };
+
+        window.saveTask = () => {
+            const taskName = document.getElementById('edit-task-name').value || "未命名任务";
+
+            if (window.taskOperationMode === 'select') {
+                if (window.selectedPointIndices.length === 0) {
+                    alert("请至少选择一个点位");
+                    return;
+                }
+
+                const payload = {
+                    name: taskName,
+                    map_name: window.currentSelectedMap,
+                    mode: "selection",
+                    points_config: window.selectedPointIndices
+                };
+                socket.emit('save_task_by_map', payload);
+                alert("选点路径任务 [" + taskName + "] 保存成功");
+
+            } else {
+                window.editingTask.type = document.getElementById('edit-task-type').value;
+
+                const index = window.allTasks.findIndex(t => t.id === window.editingTask.id);
+                if(index > -1) window.allTasks[index] = window.editingTask;
+                else window.allTasks.push(window.editingTask);
+
+                const payload = {
+                    name: taskName,
+                    map_name: window.currentSelectedMap,
+                    count: window.editingTask.points.length,
+                    points: window.editingTask.points.map(p => ({
+                        mode: 1,
+                        q_w: 1.0, q_x: 0.0, q_y: 0.0, q_z: 0.0,
+                        speed: 0.4,
+                        tts_text: p.tts_text,
+                        x: p.x,
+                        y: -(p.z),
+                        z: 0.0,
+                    }))
+                };
+
+                socket.emit('save_task_by_map', payload);
+                alert("常规标点任务 [" + taskName + "] 保存成功");
+            }
+
+            window.closeEditor();
+        };
+
+        window.deleteTask = (fileId) => {
+            if (!fileId) {
+                alert("删除失败：未指定任务ID");
+                return;
+            }
+
+            if (!confirm(`确定要彻底删除任务 [${fileId}] 吗？此操作将永久删除文件！`)) {
+                return;
+            }
+
+            socket.emit('delete_task', {
+                name: fileId
+            });
+
+            alert("任务已删除");
+            if (typeof window.closeEditor === 'function') {
+                window.closeEditor();
+            }
+            window.loadTaskDashboard();
+        };
+
+        window.handleMapChange = (mapName) => {
+            if (!mapName) {
+                window.resetEditor();
+                return;
+            }
+            window.resetEditor();
+            window.currentSelectedMap = mapName;
+            loadMapToContainer(mapName, 'map-interaction-area');
+
+            if (window.editorMode === 'edit') {
+                window.loadTaskForMap(mapName);
+            } else {
+                console.log("新增模式：仅加载地图底图，跳过任务数据加载");
+            }
+        };
+
+        // 2. 状态管理
+        window.editingTask = { points: [] };
+
+        // 3. 当点击地图添加点时，发送到前端内存并即时渲染
+        window.savePointToMemory = (x, y, z, type) => {
+            const newPoint = { x, y, z, type, id: Date.now() };
+            window.editingTask.points.push(newPoint);
+            window.renderSubTaskList();     // 渲染左侧列表
+            window.renderMarkersForTask();  // 渲染 3D 标点
+        };
+
+        // 5. 监听后端加载数据
+        socket.on('task_data', (data) => {
+            console.log("收到任务数据:", data);
+            window.editingTask.points = [];
+            if (data.points) {
+                window.editingTask.points = data.points.map(p => ({
+                    id: Date.now() + Math.random(),
+                    x: p.x,
+                    y: 0.0, // 固定高度
+                    z: -(p.y), // 对应后端的 y
+                    type: "广播",
+                    tts_text: p.tts_text || ""
+                }));
+            }
+
+            // 触发重绘
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        });
+
+        window.pendingStartTask = null;
+        window.currentRunningMode = null;
+
+        window.handleTaskAction = (action, fileId) => {
+            const cleanMapName = fileId.replace(/\.pcd$/, '').replace(/\.json$/, '').replace(/[-_]task$/, '');
+
+            if (action === 'start_task') {
+                window.pendingStartTask = { fileId, cleanMapName };
+                document.getElementById('task-start-modal').style.display = 'flex';
+                return;
+            }
+
+            // 如果是其他动作，正常发送指令
+            socket.emit('task_control', {
+                action: action,
+                fileId: fileId,
+                mapName: cleanMapName,
+                mode: window.currentRunningMode
+            });
+
+            switch(action) {
+                case 'pause_task':
+                    window.taskState.isPaused = true;
+                    break;
+                case 'resume_task':
+                    window.taskState.isPaused = false;
+                    break;
+                case 'stop_task':
+                    if (confirm("确定要终止该任务吗？")) {
+                        window.taskState = { fileId: null, isRunning: false, isPaused: false };
+                        window.currentRunningMode = null;
+                    } else {
+                        return;
+                    }
+                    break;
+            }
+
+            console.log(`[调试] 执行动作: ${action}, 当前状态:`, window.taskState);
+            window.loadTaskDashboard();
+        };
+
+        window.selectAndStartTask = (mode) => {
+            if (!window.pendingStartTask) return;
+
+            const { fileId, cleanMapName } = window.pendingStartTask;
+
+            // 记录全局模式
+            window.currentRunningMode = mode;
+
+            // 发送真正的启动指令
+            socket.emit('task_control', {
+                action: 'start_task',
+                fileId: fileId,
+                mapName: cleanMapName,
+                mode: mode
+            });
+
+            window.taskState = { fileId: fileId, isRunning: true, isPaused: false };
+            document.getElementById('task-start-modal').style.display = 'none';
+
+            console.log(`[任务启动] 模式: ${mode}, 任务: ${fileId}`);
+            window.loadTaskDashboard();
+        };
+
+        // ═══════════════════════════════════════════════════════════
+        //  全局状态
+        // ═══════════════════════════════════════════════════════════
+        window.ws = null;
+        let audioCtx = null;
+        window.micStream = null;
+        window.micSource = null;
+        window.scriptNode = null;
+        window.micOn = false;
+        window.state = 'IDLE';
+        window.downRate = 48000;
+        window.isPlaying = false;
+        window.nextPlayTime = 0;
+        window.lastTTSSource = null;
+        window.activeSources = [];
+        window.upChunks = 0;
+        window.dnChunks = 0;
+        window.logScroll = true;
+        window.curAsr = null;
+        window.curLlm = null;
+        window.camStream = null;
+        window.camOn = false;
+        window.dogCamOn = false;
+        window.audioFirstSent = false;
+        window.audioLogCounter = 0;
+        window.skippedAudioCount = 0;
+        window.lastAutoVqaTime = 0;
+        window.clientInterruptActive = false;
+        window.pendingVQA = false;
+        window.ttsRespondingStartTime = 0;
+        window.speechAboveCount = 0;
+        let lastUserMsgElement = null;
+
+        // ─── 唤醒词控制 ───
+        window.isDialogActive = false;
+        window._dormantHintShown = false;
+
+        // 选中的设备 ID
+        window.selectedMicId = '';
+        window.selectedSpkId = '';
+        window.selectedCamId = '';
+
+        // 对话模式
+        window.dialogMode = 'duplex';
+
+        // AI声音选择
+        window.selectedVoice = 'app_default';
+
+        // ═══════════════════════════════════════════════════════════
+        //  日志
+        // ═══════════════════════════════════════════════════════════
+        function log(text, lvl='info') {
+        console.log(`%c[${lvl.toUpperCase()}] ${text}`, `color: ${lvl==='error'?'#f85149':lvl==='warn'?'#d29922':'#58a6ff'}`);
+        }
+        function clearLogs() { /* 空函數，防止其他調用失效 */ }
+        function toggleScroll() { /* 空函數，防止按鈕事件失效 */ }
+
+        // ═══════════════════════════════════════════════════════════
+        //  对话消息
+        // ═══════════════════════════════════════════════════════════
+        function chat(text, role, streaming=false) {
+            const area = document.getElementById('chat');
+            const div = document.createElement('div');
+            div.className = 'msg ' + role;
+            if (role !== 'sys') {
+                const lbl = document.createElement('div');
+                lbl.className = 'label';
+                lbl.textContent = role === 'user' ? '你' : 'AI';
+                div.appendChild(lbl);
+            }
+
+            const c = document.createElement('div');
+            if (streaming) { c.className = 'streaming'; }
+            c.textContent = text;
+            div.appendChild(c);
+            area.appendChild(div);
+            area.scrollTop = area.scrollHeight;
+            return c;
+        }
+        function clearChat() {
+        document.getElementById('chat').innerHTML = '';
+        curAsr = null; curLlm = null;
+        }
+
+        // ────── 麦克风列表 ───────
+        function wizRefreshMics() {
+            const micSel = document.getElementById('wiz-mic-sel');
+            const statusEl = document.getElementById('wiz-mic-status');
+
+            if (!statusEl) return;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+
+                ws.send(JSON.stringify({
+                    type: 'get_robot_audio_devices',
+                    mode: 'input'
+                }));
+
+                statusEl.textContent = "正在获取机器狗麦克风列表...";
+                statusEl.className = 'dev-status processing';
+                log('[向导] 已发送获取机器狗麦克风请求，等待狗子回应...', 'info');
+
+            } else {
+                statusEl.textContent = "后端未连接，无法获取机器狗麦克风";
+                statusEl.className = 'dev-status error';
+                log('[向导] 获取机器狗麦克风失败：WebSocket 未连接', 'error');
+            }
+        }
+
+        // ─────── 喇叭列表 ───────
+        async function wizRefreshSpks() {
+            const spkSel = document.getElementById('wiz-spk-sel');
+            const statusEl = document.getElementById('wiz-spk-status');
+
+            if (!statusEl) return;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+
+                ws.send(JSON.stringify({
+                    type: 'get_robot_audio_devices',
+                    mode: 'output'
+                }));
+
+                statusEl.textContent = "正在获取机器狗喇叭列表...";
+                statusEl.className = 'dev-status processing';
+                log('[向导] 已发送获取机器狗喇叭请求，等待狗子回应...', 'info');
+
+            } else {
+                statusEl.textContent = "后端未连接，无法获取机器狗喇叭";
+                statusEl.className = 'dev-status error';
+                log('[向导] 获取机器狗喇叭失败：WebSocket 未连接', 'error');
+            }
+        }
+
+        // ─────── 摄像头列表 ───────
+        function wizRefreshCams() {
+            const camSel = document.getElementById('wiz-cam-sel');
+            const statusEl = document.getElementById('wiz-cam-status');
+
+            if (!statusEl) return;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+
+                ws.send(JSON.stringify({
+                    type: 'get_camera_list'
+                }));
+
+                statusEl.textContent = "正在获取机器狗摄像头列表...";
+                statusEl.className = 'dev-status processing';
+                log('[向导] 已发送获取机器狗摄像头请求，等待狗子回应...', 'info');
+
+            } else {
+                statusEl.textContent = "后端未连接，无法获取机器狗摄像头";
+                statusEl.className = 'dev-status error';
+                log('[向导] 获取机器狗摄像头失败：WebSocket 未连接', 'error');
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  设备测试: 麦克风 (使用 MediaRecorder — 与百炼控制台相同方式)
+        // ═══════════════════════════════════════════════════════════
+        async function wizTestMic() {
+            const devId = document.getElementById('wiz-mic-sel').value;
+            if (!devId) return alert('请选择麦克风');
+            sendTestCommand("mic", devId);
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  设备测试: 喇叭/耳机
+        // ═══════════════════════════════════════════════════════════
+        async function wizTestSpeaker() {
+            const devId = document.getElementById('wiz-spk-sel').value;
+            if (!devId) return alert('请选择喇叭');
+            sendTestCommand("speaker", devId);
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  设备测试: 摄像头
+        // ═══════════════════════════════════════════════════════════
+        let wizCamStream = null;
+
+        async function wizTestCam() {
+            const devId = document.getElementById('wiz-cam-sel').value;
+            if (!devId) return alert('请选择摄像头');
+            sendTestCommand("cam", devId);
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  对话模式选择
+        // ═══════════════════════════════════════════════════════════
+        function selectDialogMode(mode) {
+        dialogMode = mode;
+        document.getElementById('mode-duplex').classList.toggle('selected', mode === 'duplex');
+        document.getElementById('mode-push2talk').classList.toggle('selected', mode === 'push2talk');
+        const statusEl = document.getElementById('wiz-mode-status');
+        if (statusEl) {
+            statusEl.textContent = mode === 'duplex' ? '當前模式: 全雙工 (duplex)' : '當前模式: 半雙工 (push2talk)';
+        }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  声音选择
+        // ═══════════════════════════════════════════════════════════
+        function populateVoices() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({action: 'voices'}));
+        }
+        }
+
+        function handleVoicesData(voices) {
+        const sel = document.getElementById('wiz-voice-sel');
+        const prev = sel.value;
+        sel.innerHTML = '';
+        for (const [key, label] of Object.entries(voices)) {
+            const o = document.createElement('option');
+            o.value = key;
+            o.textContent = label;
+            sel.appendChild(o);
+        }
+        // 恢复之前的选择
+        if (prev && [...sel.options].some(o => o.value === prev)) {
+            sel.value = prev;
+        } else if (selectedVoice && [...sel.options].some(o => o.value === selectedVoice)) {
+            sel.value = selectedVoice;
+        }
+        // 更新状态文字
+        const selected = sel.options[sel.selectedIndex];
+        if (selected) {
+            const name = selected.textContent.split(' ')[0];
+            document.getElementById('wiz-voice-status').textContent = '当前声音: ' + name + ' — 可在百炼控制台配置更多声音';
+        }
+        updateVoiceIndicator();
+        log(`[向导] 已加载 ${Object.keys(voices).length} 种声音`, 'info');
+        }
+
+        function updateVoiceIndicator() {
+        const el = document.getElementById('voice-indicator');
+        const sel = document.getElementById('wiz-voice-sel');
+        const selected = sel.options[sel.selectedIndex];
+        if (selected) {
+            const name = selected.textContent.split(' ')[0];
+            if (el) {
+                el.textContent = name;
+                el.title = 'AI声音: ' + selected.textContent;
+                el.className = 'badge badge-info';
+            }
+        } else {
+            el.textContent = selectedVoice;
+            el.className = 'badge badge-idle';
+        }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  百炼连接测试 (端到端: API + TTS + 喇叭)
+        // ═══════════════════════════════════════════════════════════
+        function wizTestBailian() {
+        const btn = document.getElementById('wiz-test-bailian-btn');
+        const status = document.getElementById('wiz-bailian-status');
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            status.textContent = '后端 WebSocket 未连接, 请稍后再试';
+            status.className = 'dev-status err';
+            return;
+        }
+
+        btn.textContent = '测试中...';
+        btn.disabled = true;
+        btn.className = 'primary';
+        status.textContent = '正在连接百炼 API 并发送测试文本...';
+        status.className = 'dev-status testing';
+
+        // 读取当前选中的声音
+        const voiceSel = document.getElementById('wiz-voice-sel');
+        if (voiceSel) selectedVoice = voiceSel.value;
+
+        ws.send(JSON.stringify({action: 'test_bailian', voice: selectedVoice}));
+        log('[百炼测试] 已发送测试请求 (声音: ' + selectedVoice + ')', 'event');
+
+        // 10秒后如果还没结果, 恢复按钮
+        setTimeout(() => {
+            if (btn.disabled) {
+            btn.disabled = false;
+            btn.textContent = '重新测试';
+            btn.className = 'primary';
+            }
+        }, 25000);
+        }
+
+        // 百炼测试 TTS 播放 (在 ws.onmessage 中处理二进制)
+        function playTestTTS(buf) {
+        if (!ensureAudioContext()) return;
+        console.log("收到音频包，大小:", buf.byteLength);
+        const int16 = new Int16Array(buf);
+        console.log("音频数据样本[0]:", int16[0]);
+        if (int16.length === 0) return;
+        const toRate = audioCtx.sampleRate;
+        const ratio = toRate / downRate; // SDK 返回 48kHz, downRate=48000
+        const outLen = Math.floor(int16.length * ratio);
+        const f32 = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+            const si = i / ratio;
+            const idx = Math.floor(si);
+            const frac = si - idx;
+            const s0 = int16[idx] || 0;
+            const s1 = int16[Math.min(idx+1, int16.length-1)] || 0;
+            f32[i] = (s0*(1-frac) + s1*frac) / 32768;
+        }
+        const abuf = audioCtx.createBuffer(1, f32.length, toRate);
+        abuf.getChannelData(0).set(f32);
+        const src = audioCtx.createBufferSource();
+        src.buffer = abuf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+        // 尝试用选中的喇叭
+        if (selectedSpkId && typeof audioCtx.destination.setSinkId === 'function') {
+            audioCtx.setSinkId(selectedSpkId)
+                .catch((error) => console.error("音频切换失败:", error));
+        } else {
+            console.warn("未设置 selectedSpkId 或浏览器不支持 setSinkId");
+        }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  向导: 跳过 / 开始
+        // ═══════════════════════════════════════════════════════════
+        function wizSkip() {
+        closeWizard();
+        log('[向导] 跳过设备设置', 'info');
+        }
+
+        function wizStart() {
+            const videoImg = document.getElementById('wiz-cam-video');
+            if (wizCamStream && videoImg) {
+                videoImg.onerror = null;
+                videoImg.onload = null;
+                videoImg.src = ''; // 彻底断开流
+            }
+            wizCamStream = null; // 重置标记
+
+            const wizMicSel = document.getElementById('wiz-mic-sel');
+            const wizSpkSel = document.getElementById('wiz-spk-sel');
+            const wizCamSel = document.getElementById('wiz-cam-sel');
+            const wizVoiceSel = document.getElementById('wiz-voice-sel');
+
+            selectedMicId = wizMicSel ? wizMicSel.value : 'default';
+            selectedSpkId = wizSpkSel ? wizSpkSel.value : 'default';
+            selectedCamId = wizCamSel ? wizCamSel.value : '0';
+            selectedVoice = wizVoiceSel ? wizVoiceSel.value : 'default';
+
+            const mainMicSel = document.getElementById('mic-sel');
+            if (mainMicSel && mainMicSel.options && selectedMicId) {
+                if ([...mainMicSel.options].some(o => o.value === selectedMicId)) {
+                    mainMicSel.value = selectedMicId;
+                }
+            }
+
+            const micText = wizMicSel && wizMicSel.selectedOptions && wizMicSel.selectedOptions[0] ? wizMicSel.selectedOptions[0].textContent : '默认';
+            const spkText = wizSpkSel && wizSpkSel.selectedOptions && wizSpkSel.selectedOptions[0] ? wizSpkSel.selectedOptions[0].textContent : '默认';
+            const camText = wizCamSel && wizCamSel.selectedOptions && wizCamSel.selectedOptions[0] ? wizCamSel.selectedOptions[0].textContent : '默认';
+            const voiceText = wizVoiceSel && wizVoiceSel.selectedOptions && wizVoiceSel.selectedOptions[0] ? wizVoiceSel.selectedOptions[0].textContent : '默认';
+
+            if (typeof closeWizard === 'function') closeWizard();
+
+            log('[向导] 设备设置完成 — 麦克风: ' + micText, 'event');
+            log('[向导] 喇叭: ' + spkText, 'event');
+            log('[向导] 摄像头: ' + camText, 'event');
+            log('[向导] 对话模式: ' + (typeof dialogMode !== 'undefined' && dialogMode === 'duplex' ? '全双工' : '半双工'), 'event');
+            log('[向导] AI声音: ' + selectedVoice + ' (' + voiceText + ')', 'event');
+
+            if (typeof updateModeIndicator === 'function') updateModeIndicator();
+            if (typeof updateVoiceIndicator === 'function') updateVoiceIndicator();
+
+            if (selectedCamId && !camOn) {
+                // 优先尝试运行 startCam，如果不存在则兼容运行 toggleCam
+                if (typeof startCam === 'function') {
+                    startCam().catch(()=>{});
+                } else if (typeof toggleCam === 'function') {
+                    toggleCam().catch(()=>{});
+                }
+            }
+        }
+
+        function closeWizard() {
+        document.getElementById('wizard-overlay').classList.add('hidden');
+        }
+
+        function showWizard() {
+            const wizMicSel = document.getElementById('wiz-mic-sel');
+            const wizCamSel = document.getElementById('wiz-cam-sel');
+
+            if (wizMicSel && wizMicSel.options && wizMicSel.options.length > 0) {
+                wizMicSel.options[0].selected = true;
+            }
+
+            if (wizCamSel && wizCamSel.options && wizCamSel.options.length > 0) {
+                wizCamSel.options[0].selected = true;
+            }
+
+            const wizardOverlay = document.getElementById('wizard-overlay');
+            if (wizardOverlay) {
+                wizardOverlay.classList.remove('hidden');
+            }
+
+            if (typeof selectDialogMode === 'function') {
+                selectDialogMode(dialogMode);
+            }
+
+            const voiceSel = document.getElementById('wiz-voice-sel');
+            if (voiceSel && voiceSel.options && selectedVoice) {
+                if ([...voiceSel.options].some(o => o.value === selectedVoice)) {
+                    voiceSel.value = selectedVoice;
+                }
+            }
+
+            if (typeof wizRefreshMics === 'function') wizRefreshMics();
+            if (typeof wizRefreshSpks === 'function') wizRefreshSpks();
+            if (typeof wizRefreshCams === 'function') wizRefreshCams();
+            if (typeof populateVoices === 'function') populateVoices();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  麦克风设备 (主界面 — 使用 selectedMicId)
+        // ═══════════════════════════════════════════════════════════
+        window.refreshMics = function() {
+            if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+                console.log("正在请求机器狗麦克风列表...");
+                window.ws.send(JSON.stringify({
+                    type: 'get_robot_audio_devices',
+                    mode: 'input'
+                }));
+            } else {
+                log("WebSocket 未连接，无法获取机器狗设备列表", 'error');
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════
+        //  麦克风采集
+        // ═══════════════════════════════════════════════════════════
+        function startMic() {
+            // 1. 获取用户在下拉菜单中选择的机器狗麦克风 ID
+            const devId = document.getElementById('mic-sel').value || window.selectedMicId;
+
+            if (!devId) {
+                log('请先选择机器狗麦克风', 'warn');
+                return;
+            }
+
+            // 2. 发送 WebSocket 指令，告诉后端让机器狗开始采集音频
+            if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+                window.ws.send(JSON.stringify({
+                    action: 'start_robot_audio',
+                    deviceId: devId
+                }));
+
+                window.micOn = true;
+                document.getElementById('mic-btn').classList.add('active');
+                log(`已向机器狗发送录音启动指令，设备=${devId}`, 'info');
+
+                // 3. 将 onMicData 定义在 startMic 内部作为内部回调函数
+                const onMicData = function(e) {
+                    if (!window.micOn || !window.ws || window.ws.readyState !== WebSocket.OPEN) return;
+
+                    if (window.dialogMode === 'push2talk' && window.state !== 'Listening') {
+                        window.skippedAudioCount = (window.skippedAudioCount || 0) + 1;
+                        if (window.skippedAudioCount <= 5 || window.skippedAudioCount % 100 === 0) {
+                            log(`麦克风采集中但音频未发送 (state=${window.state}, push2talk模式, 累计跳过${window.skippedAudioCount}次)`, 'warn');
+                        }
+                        return;
+                    }
+
+                    const input = e.inputBuffer.getChannelData(0);
+                    const nativeRate = window.audioCtx ? window.audioCtx.sampleRate : 16000;
+                    const targetRate = 16000;
+                    const ratio = nativeRate / targetRate;
+                    const outLen = Math.floor(input.length / ratio);
+                    if (outLen === 0) return;
+
+                    const int16 = new Int16Array(outLen);
+                    for (let i = 0; i < outLen; i++) {
+                        const si = i * ratio;
+                        const idx = Math.floor(si);
+                        const frac = si - idx;
+                        const s0 = input[idx] || 0;
+                        const s1 = input[Math.min(idx + 1, input.length - 1)] || 0;
+                        int16[i] = Math.max(-32768, Math.min(32767, Math.round((s0 * (1 - frac) + s1 * frac) * 32767)));
+                    }
+
+                    let rms = 0;
+                    for (let i = 0; i < int16.length; i++) rms += int16[i] * int16[i];
+                    rms = Math.sqrt(rms / int16.length) / 32768;
+
+                    const vizBar = document.getElementById('viz-bar');
+                    if (vizBar) vizBar.style.width = Math.min(100, rms * 600) + '%';
+
+                    // ─── 客户端 VAD 自动打断 (持续语音检测) ───
+                    const MIN_SPEECH_CHUNKS = 8;  // 至少需要 ~680ms 持续语音才触发打断
+                    if (window.isDialogActive && window.dialogMode === 'duplex' && window.state === 'Responding' && !window.clientInterruptActive) {
+                        if (rms > 0.012) {
+                            window.speechAboveCount = (window.speechAboveCount || 0) + 1;
+                        } else {
+                            window.speechAboveCount = Math.max(0, (window.speechAboveCount || 0) - 3);
+                        }
+                        if (window.speechAboveCount >= MIN_SPEECH_CHUNKS) {
+                            window.clientInterruptActive = true;
+                            window.speechAboveCount = 0;
+                            log(`[自动打断] 检测到持续说话 (连续${MIN_SPEECH_CHUNKS}+块, rms=${rms.toFixed(4)}), 通知后端中断`, 'event');
+
+                            // 向服务端发送打断请求，由后端完成硬件级打断与音频停止
+                            if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+                                window.ws.send(JSON.stringify({action: 'interrupt'}));
+                            }
+                            setTimeout(() => { window.clientInterruptActive = false; }, 2000);
+                        }
+                    }
+
+                    if (window.state !== 'Responding') {
+                        window.speechAboveCount = 0;
+                        window.clientInterruptActive = false;
+                    }
+
+                    window.ws.send(int16.buffer);
+                    window.upChunks = (window.upChunks || 0) + 1;
+                    window.audioLogCounter = (window.audioLogCounter || 0) + 1;
+
+                    const sUp = document.getElementById('s-up');
+                    if (sUp) sUp.textContent = window.upChunks;
+
+                    if (!window.audioFirstSent) {
+                        window.audioFirstSent = true;
+                        log(`首次发送音频! int16.length=${int16.length}, nativeRate=${nativeRate}Hz`, 'event');
+                    }
+                };
+
+                // 4. 将机器狗的音视频流绑定到处理节点
+                if (window.robotAudioStream && window.audioCtx) {
+                    if (window.robotAudioSource) {
+                        try { window.robotAudioSource.disconnect(); } catch(e) {}
+                    }
+                    if (window.robotAudioProcessor) {
+                        try { window.robotAudioProcessor.disconnect(); } catch(e) {}
+                    }
+
+                    window.robotAudioSource = window.audioCtx.createMediaStreamSource(window.robotAudioStream);
+                    window.robotAudioProcessor = window.audioCtx.createScriptProcessor(4096, 1, 1);
+                    window.robotAudioProcessor.onaudioprocess = onMicData;
+
+                    window.robotAudioSource.connect(window.robotAudioProcessor);
+                    window.robotAudioProcessor.connect(window.audioCtx.destination);
+                    log('已成功将机器狗音频流绑定到处理节点', 'info');
+                } else {
+                    log('已发送指令，请确保机器狗音频流已正确挂载', 'info');
+                }
+            } else {
+                log('WebSocket 未连接，无法启动机器狗录音', 'error');
+            }
+        }
+
+        function stopMic() {
+            if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+                window.ws.send(JSON.stringify({ action: 'stop_robot_audio' }));
+            }
+            window.micOn = false;
+            document.getElementById('mic-btn').classList.remove('active');
+            log('已发送停止录音指令', 'info');
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  自动 VQA: 当用户说出与"看"相关的关键词时, 自动拍照发送
+        // ═══════════════════════════════════════════════════════════
+        const VQA_KEYWORDS = [
+        '看到什么', '看到了什么', '你看到', '你看到了', '你看见', '看见了什么',
+        '你在看', '看什么', '看的环境', '看到的环境',
+        '拍摄照片', '拍张照片', '拍个照片', '拍一下', '帮我拍', '帮我拍照',
+        '拍照', '照一张', '拍张照', '请拍照', '请拍摄图片', '请拍摄',
+        '拍摄图片', '拍摄一下', '帮我拍摄',
+        '周围环境', '周围是什么', '环境是什么', '身边的环境', '你面前',
+        '眼前', '你眼前的', '描述环境', '描述一下环境',
+        '看看', '帮我看看', '你看', '你看一下',
+        '摄像头看看', '打开摄像头看看', '用摄像头看',
+        // 新增: 更多常见表达 (问题3修复)
+        '看到这个', '看到吗', '看到了吗', '能看到什么', '能看到',
+        '看到的内容', '介绍一下看到', '描述一下看到', '看到的画面',
+        '你能看到', '你可以看到', '你是否看到',
+        '介绍一下环境', '描述环境', '看看周围', '看看这里',
+        ];
+
+        function checkAutoVQA(asrText) {
+        // 防抖: 8秒内不重复触发
+        const now = Date.now();
+        if (now - lastAutoVqaTime < 8000) return false;
+        const text = asrText.toLowerCase();
+        for (const kw of VQA_KEYWORDS) {
+            if (text.includes(kw)) {
+            lastAutoVqaTime = now;
+            return true;
+            }
+        }
+        return false;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  唤醒词检测: "小创小创" + "开始对话/停止对话"
+        // ═══════════════════════════════════════════════════════════
+        // 唤醒词需要同时包含"小创"(至少两次) + 动作词
+        const WAKE_UP_KEYWORDS = ['开始对话', '开始聊天', '开始交流', '启动对话', '开启对话'];
+        const SLEEP_KEYWORDS   = ['停止对话', '结束对话', '关闭对话', '停止聊天', '结束聊天', '退出对话', '退出聊天'];
+
+        function checkWakeWord(asrText) {
+        /**
+        * 检测唤醒词, 返回: 'wake' | 'sleep' | null
+        * 匹配逻辑: 文本中包含 "小创" (至少出现1次, ASR可能只识别出一次)
+        *          + 包含动作词 (开始对话/停止对话)
+        */
+        if (!asrText) return null;
+        const text = asrText.toLowerCase();
+        // 检查是否包含 "小创" (至少出现1次)
+        const hasName = text.includes('小创');
+        if (!hasName) return null;
+        // 检查动作词
+        for (const kw of WAKE_UP_KEYWORDS) {
+            if (text.includes(kw)) {
+            log(`[唤醒词] 检测到唤醒指令: "${asrText}" → 匹配关键词"${kw}"`, 'event');
+            return 'wake';
+            }
+        }
+        for (const kw of SLEEP_KEYWORDS) {
+            if (text.includes(kw)) {
+            log(`[唤醒词] 检测到休眠指令: "${asrText}" → 匹配关键词"${kw}"`, 'event');
+            return 'sleep';
+            }
+        }
+        log(`[唤醒词] 包含"小创"但未匹配动作词: "${asrText}"`, 'debug');
+        return null;
+        }
+
+        function setDialogActive(active) {
+        isDialogActive = active;
+        const badge = document.getElementById('wake-badge');
+        if (badge) {
+            if (active) {
+            badge.textContent = '对话中';
+            badge.className = 'badge badge-ok';
+            badge.title = '对话已激活, 正常交互中';
+            } else {
+            badge.textContent = '待唤醒';
+            badge.className = 'badge badge-warn';
+            badge.title = '请说"小创小创, 开始对话"唤醒';
+            }
+        }
+        // 更新文本输入框 placeholder
+        const txtIn = document.getElementById('txt-in');
+        if (txtIn) {
+            txtIn.placeholder = active
+            ? '输入文本发送给 AI (Enter 发送)...'
+            : '输入文字将自动激活对话...';
+        }
+        // 全屏 toast 提示
+        const toast = document.getElementById('wake-toast');
+        if (toast) {
+            toast.textContent = active ? '对话已激活' : '对话已休眠';
+            toast.className = 'wake-toast ' + (active ? 'wake' : 'sleep');
+            // 触发 reflow 后添加 show class
+            void toast.offsetWidth;
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 2000);
+        }
+        log(active ? '★ 对话已激活 — 请开始说话' : '★ 对话已休眠 — 等待唤醒词"小创小创, 开始对话"', 'event');
+        if (!active) {
+            chat('[系统] 对话已休眠, 说"小创小创, 开始对话"唤醒, 或直接打字/点击"待唤醒"标签激活', 'sys');
+            // 休眠时打断当前 TTS
+            doInterrupt();
+            _dormantHintShown = false;  // 重置, 下次进入休眠后仍可显示提示
+        } else {
+            chat('[系统] 对话已激活, 小创在线为您服务', 'sys');
+            _dormantHintShown = false;  // 激活后重置休眠提示标志
+        }
+        }
+
+        function showDormantHint(source) {
+        // 休眠时收到交互事件, 在聊天区显示一次性提示
+        if (_dormantHintShown) return;
+        _dormantHintShown = true;
+        const hint = source === 'voice'
+            ? '[系统] 检测到语音, 但对话尚未激活。请说"小创小创, 开始对话", 或点击顶部"待唤醒"标签激活'
+            : '[系统] 对话尚未激活。请说"小创小创, 开始对话", 或点击顶部"待唤醒"标签激活';
+        chat(hint, 'sys');
+        log(`[休眠提示] 已显示 (${source})`, 'info');
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  WebSocket 到后端
+        // ═══════════════════════════════════════════════════════════
+        function connectWS() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${proto}//${location.host}/ws`);
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = () => {
+            log('WebSocket 已连接到后端', 'info');
+            ws.send(JSON.stringify({ "type": "get_camera_list" }));
+            ws.send(JSON.stringify({ "type": "get_robot_audio_devices", "mode": "input" }));
+            ws.send(JSON.stringify({ "type": "get_robot_audio_devices", "mode": "output" }));
+
+            const wsDot = document.getElementById('ws-dot');
+            if (wsDot) {
+                wsDot.style.background = 'var(--green)';
+            }
+
+            const wsSt = document.getElementById('ws-st');
+            if (wsSt) {
+                wsSt.textContent = '已连接';
+            }
+
+            const srvBadge = document.getElementById('srv-badge');
+            if (srvBadge) {
+                srvBadge.textContent = '后端已连接';
+                srvBadge.className = 'badge badge-ok';
+            }
+
+            if (typeof populateVoices === 'function') {
+                populateVoices();
+            } else {
+                log('[提示] 当前环境中未定义 populateVoices 函数，跳过声音加载', 'warn');
+            }
+        };
+        ws.onmessage = (e) => {
+            let msg;
+            try {
+                msg = JSON.parse(e.data);
+            } catch(err) {
+                log('解析消息失败: ' + err, 'error');
+                return;
+            }
+
+            switch(msg.type) {
+                case 'mic_list':
+                    window.renderDeviceList('wiz-mic-sel', 'wiz-mic-status', msg.devices, '麦克风');
+                    window.renderDeviceList('mic-sel', 'mic-status', msg.devices, '麦克风');
+                    break;
+
+                case 'speaker_list':
+                    window.renderDeviceList('wiz-spk-sel', 'wiz-spk-status', msg.devices, '喇叭');
+                    window.renderDeviceList('spk-sel', 'spk-status', msg.devices, '喇叭');
+                    break;
+
+                case 'camera_list':
+                    window.renderDeviceList('wiz-cam-sel', 'wiz-cam-status', msg.devices, '摄像头');
+                    break;
+                case 'status':
+                    // 收到状态更新，直接更新 UI，无需进 handleEvent
+                    window.updateBailianBadge(msg.data.connected);
+                    handleEvent(msg); // 状态日志记录依然需要
+                    break;
+                case 'restore_device_state':
+                    console.log("正在恢复设备选择:", msg);
+
+                    // 恢复麦克风选择
+                    if (msg.mic_id) {
+                        ['wiz-mic-sel', 'mic-sel'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = msg.mic_id;
+                                // 触发 change 事件，让原本的监听器执行切换逻辑
+                                el.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    }
+
+                    // 恢复喇叭选择 (如果后端也支持存储 spk_id)
+                    if (msg.spk_id) {
+                        ['wiz-spk-sel', 'spk-sel'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = msg.spk_id;
+                                // 触发 change 事件，让原本的监听器执行切换逻辑
+                                el.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    }
+                    break;
+                default:
+                    break;
+            }
+            handleEvent(msg);
+        };
+        ws.onclose = () => {
+            log('WebSocket 断开, 3秒后重连...', 'warn');
+            const wsDot = document.getElementById('ws-dot') || document.getElementById('dot');
+            if (wsDot) wsDot.style.background = 'var(--red)';
+            const wsSt = document.getElementById('ws-st');
+            if (wsSt) wsSt.textContent = '已断开';
+            const srvBadge = document.getElementById('srv-badge');
+            if (srvBadge) {
+                srvBadge.textContent = '后端断开';
+                srvBadge.className = 'badge badge-err';
+            }
+            setTimeout(connectWS, 3000);
+        };
+        ws.onerror = () => { log('WebSocket 错误', 'error'); };
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  处理服务端事件
+        // ═══════════════════════════════════════════════════════════
+        function handleEvent(msg) {
+        const {type, data} = msg;
+        switch(type) {
+            case 'init':
+            state = data.state || 'IDLE';
+            downRate = data.downstream_sample_rate || 24000;
+            safeSetText('session-info', data.session_dir, '');
+            safeSetText('s-dir', data.session_dir, '-');
+            updateUI();
+            if (data.dialog_id) {
+                safeSetText('did', data.dialog_id.slice(0, 8) + '...', '');
+            }
+            safeSetText('rounds', data.round_count, 0);
+            if (data.connected) {
+                window.updateBailianBadge(true);
+            } else {
+                window.updateBailianBadge(false);
+            }
+            log(`初始化完成 | downstream=${downRate}Hz | 会话=${data.session_dir}`, 'info');
+            break;
+
+            case 'connected':
+            window.updateBailianBadge(true);
+            log('百炼服务器已连接', 'event');
+            break;
+
+            case 'started':
+            document.getElementById('did').textContent = (data||'').slice(0,8)+'...';
+            log(`会话创建: dialog_id=${data}`, 'event');
+            chat('会话已建立, 请开始说话', 'sys');
+            break;
+
+            case 'state_changed':
+            state = data;
+            updateUI();
+            log(`状态 → ${data}`, data==='Listening'?'event':'info');
+            if (data === 'Listening') {
+                document.getElementById('rounds').textContent =
+                parseInt(document.getElementById('rounds').textContent)+1;
+                // 如果有待执行的自动 VQA, 在状态稳定后执行 (仅在对话激活时)
+                if (isDialogActive && pendingVQA) {
+                log('[自动VQA] 对话已稳定 (Listening), 延迟1秒后执行拍照...', 'event');
+                setTimeout(() => {
+                    if (pendingVQA) {
+                    pendingVQA = false;
+                    doVQA();
+                    }
+                }, 1000);
+                }
+            }
+            break;
+
+            case 'asr_content':
+            if (data.finished) {
+                // ─── 唤醒词检测 (优先于所有其他处理) ───
+                const wakeAction = checkWakeWord(data.text);
+                if (wakeAction === 'wake' && !isDialogActive) {
+                setDialogActive(true);
+                ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+                break;  // 唤醒词本身不作为对话内容
+                } else if (wakeAction === 'sleep' && isDialogActive) {
+                setDialogActive(false);
+                ws.send(JSON.stringify({ type: 'set_woken', woken: false }));
+                break;  // 休眠词本身不作为对话内容
+                }
+                // ─── 休眠时不处理对话内容, 但给出提示 ───
+                if (!isDialogActive) {
+                showDormantHint('voice');
+                log(`[休眠] 忽略 ASR: "${data.text}"`, 'debug');
+                return;
+                }
+                if (curAsr) { curAsr.textContent = data.text; curAsr.className = ''; curAsr = null; }
+                //else { chat(data.text, 'user'); }
+                log(`ASR 最终: "${data.text}"`, 'info');
+                // 自动 VQA: 检测用户是否说了"看"/"拍照"相关关键词
+                if (checkAutoVQA(data.text)) {
+                log(`[自动VQA] 检测到拍照关键词, 等待对话稳定后自动拍照...`, 'event');
+                chat('[自动拍照] 正在识别画面...', 'sys');
+                pendingVQA = true;
+                setTimeout(() => {
+                    if (pendingVQA && state !== 'Thinking' && state !== 'Responding') {
+                    pendingVQA = false;
+                    doVQA();
+                    } else if (pendingVQA) {
+                    log('[自动VQA] 对话仍在进行中, 继续等待...', 'info');
+                    }
+                }, 1500);
+                }
+            } else {
+                // 流式 ASR: 也检测唤醒词 (实时响应)
+                const wakeStream = checkWakeWord(data.text);
+                if (wakeStream === 'wake' && !isDialogActive) {
+                setDialogActive(true);
+                ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+                break;
+                } else if (wakeStream === 'sleep' && isDialogActive) {
+                setDialogActive(false);
+                ws.send(JSON.stringify({ type: 'set_woken', woken: false }));
+                break;
+                }
+                if (!isDialogActive) { showDormantHint('voice'); break; }  // 休眠时不显示流式ASR
+                if (!curAsr) curAsr = chat(data.text, 'user', true);
+                else curAsr.textContent = data.text;
+            }
+            break;
+
+            case 'asr_final':
+            // 唤醒词检测
+            const wakeFinal = checkWakeWord(data);
+            if (wakeFinal === 'wake' && !isDialogActive) {
+                setDialogActive(true);
+                ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+                break;
+            } else if (wakeFinal === 'sleep' && isDialogActive) {
+                setDialogActive(false);
+                ws.send(JSON.stringify({ type: 'set_woken', woken: false }));
+                break;
+            }
+            if (!isDialogActive) { showDormantHint('voice'); break; }  // 休眠时不处理
+            if (curAsr) { curAsr.textContent = data; curAsr.className = ''; curAsr = null; }
+            else if (data) chat(data, 'user');
+            // 也检测 asr_final 的关键词 (同样使用延迟 VQA)
+            if (data && checkAutoVQA(data)) {
+                log(`[自动VQA] 检测到拍照关键词, 等待对话稳定后自动拍照...`, 'event');
+                chat('[自动拍照] 正在识别画面...', 'sys');
+                pendingVQA = true;
+                setTimeout(() => {
+                if (pendingVQA && state !== 'Thinking' && state !== 'Responding') {
+                    pendingVQA = false;
+                    doVQA();
+                } else if (pendingVQA) {
+                    log('[自动VQA] 对话仍在进行中, 继续等待...', 'info');
+                }
+                }, 1500);
+            }
+            break;
+
+            case 'llm_content':
+            if (!isDialogActive) { showDormantHint('voice'); break; }  // 休眠时不显示AI回复
+            if (data.finished) {
+                if (curLlm) { curLlm.textContent = data.text; curLlm.className = ''; curLlm = null; }
+                else { chat(data.text, 'ai'); }
+                log(`LLM 最终: "${data.text}"`, 'info');
+                if (data.extra_info?.commands?.includes('visual_qa')) {
+                log('检测到 visual_qa, 自动拍照...', 'event');
+                doVQA();
+                }
+            } else {
+                if (data.text) {
+                if (!curLlm) curLlm = chat(data.text, 'ai', true);
+                else curLlm.textContent = data.text;
+                }
+            }
+            break;
+
+            case 'responding_started':
+            ttsRespondingStartTime = Date.now();  // 记录 TTS 开始时间, 用于防回声打断
+            log('AI 开始回复', 'info');
+            break;
+
+            case 'responding_ended':
+            log('AI 回复结束', 'info');
+            break;
+
+            case 'interrupted':
+            log('打断已生效', 'event');
+            pendingVQA = false;  // 打断时取消待执行的自动 VQA
+            break;
+
+            case 'error':
+            log('错误: '+data, 'error');
+            chat('⚠ '+data, 'sys');
+            break;
+
+            case 'disconnected':
+            state = 'DISCONNECTED';
+            window.updateBailianBadge(false);
+            log('百炼服务器断开: '+data, 'error');
+            chat('百炼服务器已断开连接, 请点击"重连"按钮', 'sys');
+            break;
+
+            case 'status':
+            log(`状态: state=${data.state} connected=${data.connected} rounds=${data.round_count}`, 'info');
+            log(`  浏览器→服务器: ${data.audio_chunks_from_browser} chunks / ${data.audio_chunks_sent} chunks (转发)`, 'info');
+            log(`  服务器→浏览器: ${data.tts_chunks_received} TTS chunks`, 'info');
+            if (data.audio_chunks_from_browser === 0) {
+                log(`  注意: 服务器未收到任何音频! 请检查麦克风是否启动`, 'warn');
+            }
+            break;
+
+            case 'log':
+            log(data, 'info');
+            break;
+
+            case 'voices':
+            handleVoicesData(data);
+            break;
+
+            case 'test_status':
+            {
+                const statusEl = document.getElementById('wiz-bailian-status');
+                if (statusEl) {
+                statusEl.textContent = data;
+                statusEl.className = 'dev-status testing';
+                }
+                log('[百炼测试] ' + data, 'event');
+            }
+            break;
+
+            case 'reset_audio':
+            log('[音频] 收到后端重置音频指令', 'debug');
+            break;
+
+            case 'test_result':
+            {
+                const statusEl = document.getElementById('wiz-bailian-status');
+                const btn = document.getElementById('wiz-test-bailian-btn');
+                if (data.ok) {
+                let msg = `百炼连接正常! 声音: ${data.voice}`;
+                if (data.llm_text) msg += ` | AI回复: "${data.llm_text.substring(0, 60)}..."`;
+                if (data.tts_chunks > 0) msg += ` | TTS: ${data.tts_chunks}块`;
+                if (data.warning) msg += ` | ${data.warning}`;
+                if (statusEl) { statusEl.textContent = msg; statusEl.className = 'dev-status ok'; }
+                if (btn) { btn.textContent = '测试通过'; btn.className = 'success'; }
+                log('[百炼测试] 通过: ' + msg, 'event');
+                } else {
+                if (statusEl) { statusEl.textContent = '测试失败: ' + (data.error || '未知错误'); statusEl.className = 'dev-status err'; }
+                if (btn) { btn.textContent = '测试失败'; btn.className = 'danger'; }
+                log('[百炼测试] 失败: ' + (data.error || ''), 'error');
+                }
+                // 2秒后恢复按钮
+                setTimeout(() => { if (btn) { btn.textContent = '重新测试'; btn.className = 'primary'; btn.disabled = false; } }, 3000);
+            }
+            break;
+        }
+        }
+
+        function updateUI() {
+        document.getElementById('dot').className = 'state-dot '+state.toLowerCase();
+        document.getElementById('state-txt').textContent = state;
+        // push2talk 模式下, AI 回复中显示"打断"提示在麦克风按钮上
+        const micBtn = document.getElementById('mic-btn');
+        if (dialogMode === 'push2talk' && state === 'Responding') {
+            micBtn.title = '点击打断AI';
+            micBtn.style.borderColor = 'var(--orange)';
+        } else {
+            micBtn.title = '切换麦克风';
+            micBtn.style.borderColor = '';
+        }
+        }
+
+        function updateModeIndicator() {
+        const el = document.getElementById('mode-indicator');
+        if (dialogMode === 'duplex') {
+            el.textContent = '全双工';
+            el.className = 'badge badge-info';
+            el.title = '全双工模式 — 可随时打断AI (点击修改)';
+        } else {
+            el.textContent = '半双工';
+            el.className = 'badge badge-warn';
+            el.title = '半双工模式 — 需轮流发言 (点击修改)';
+        }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  用户操作
+        // ═══════════════════════════════════════════════════════════
+        async function toggleMic() {
+        // push2talk 模式下, AI正在回复时点击麦克风按钮 → 打断
+        if (dialogMode === 'push2talk' && state === 'Responding' && micOn) {
+            doInterrupt();
+            log('[Push2Talk] 打断AI回复', 'event');
+            return;
+        }
+
+        if (micOn) {
+            stopMic();
+            if (ws?.readyState === WebSocket.OPEN) {
+            if (dialogMode === 'push2talk') {
+                // push2talk 模式: 松开按钮 → 停止本轮语音 (不停止整个连接)
+                ws.send(JSON.stringify({action:'stop_speech'}));
+                log('[Push2Talk] 已停止本轮语音', 'event');
+            }
+            // duplex 模式: 关闭麦克风不停止百炼连接
+            }
+        } else {
+            await startMic();
+            if (micOn && ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({action:'start', mode: dialogMode, voice: selectedVoice}));
+            log(`麦克风就绪, 已请求后端连接百炼 (模式: ${dialogMode === 'duplex' ? '全双工' : '半双工'}, 声音: ${selectedVoice})...`, 'event');
+            }
+        }
+        }
+
+        function sendTxt() {
+        const inp = document.getElementById('txt-in');
+        const t = inp.value.trim();
+        log(`[调试] 发送前状态检测: isDialogActive = ${isDialogActive}`, 'debug');
+        if (!t || !ws) return;
+        // 检查是否为唤醒/休眠指令
+        const wakeAction = checkWakeWord(t);
+        if (wakeAction === 'wake' && !isDialogActive) { setDialogActive(true); ws.send(JSON.stringify({ type: 'set_woken', woken: true })); inp.value = ''; return; }
+        if (wakeAction === 'sleep' && isDialogActive) { setDialogActive(false); ws.send(JSON.stringify({ type: 'set_woken', woken: false })); inp.value = ''; return; }
+        // 如果对话未激活, 自动激活 (文字输入视为用户主动交互)
+        if (!isDialogActive) {
+            setDialogActive(true);
+            ws.send(JSON.stringify({ type: 'set_woken', woken: true }));
+            log('[自动激活] 用户发送文字, 自动激活对话', 'event');
+        }
+        ws.send(JSON.stringify({action:'text', text:t}));
+        chat(t, 'user');
+        log(`发送文本: "${t}"`, 'info');
+        inp.value = '';
+        }
+
+        function doInterrupt() {
+        if (!ws) return;
+        ws.send(JSON.stringify({action:'interrupt'}));
+        log('发送打断', 'info');
+        pendingVQA = false;  // 手动打断时取消待执行的自动 VQA
+        }
+
+        function doReconnect() {
+        if (!ws) return;
+        if (micOn) {
+            ws.send(JSON.stringify({action:'stop'}));
+            log('正在停止旧连接...', 'info');
+            setTimeout(() => {
+            ws.send(JSON.stringify({action:'start', mode: dialogMode, voice: selectedVoice}));
+            log(`已请求重连百炼 (模式: ${dialogMode === 'duplex' ? '全双工' : '半双工'}, 声音: ${selectedVoice})...`, 'event');
+            }, 1000);
+        } else {
+            log('请先启动麦克风, 再点击重连', 'warn');
+        }
+        }
+
+        function doStatus() {
+        if (!ws) return;
+        ws.send(JSON.stringify({action:'status'}));
+        }
+
+        function doShutdown() {
+        if (!confirm('确定要关闭服务器吗？关闭后需要手动重新启动 python web_app.py')) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({action:'shutdown'}));
+            log('已请求关闭服务器...', 'warn');
+        }
+        }
+
+        // ─── 摄像头管理 (使用 selectedCamId) ─────────────
+        async function toggleCam() {
+            const camBtn = document.getElementById('cam-btn');
+            const container = document.getElementById('dog-cam-container');
+            const imgStream = document.getElementById('dog-cam-stream');
+
+            // 固定的摄像头流地址
+            const STREAM_URL = `${BACKEND_URL}/video_feed/cam3`;
+
+            if (camOn) {
+                // --- 关闭逻辑 ---
+                if (imgStream) imgStream.src = ''; // 清空 src 停止视频传输
+                if (container) container.style.display = 'none';
+
+                if (camBtn) {
+                    camBtn.textContent = '摄像头';
+                    camBtn.style.background = 'rgba(255,255,255,0.05)';
+                    camBtn.classList.remove('active');
+                }
+
+                camOn = false;
+                log('[硬件] 已关闭摄像头预览', 'info');
+            } else {
+                // --- 开启逻辑 ---
+                if (container && imgStream) {
+                    imgStream.src = STREAM_URL; // 直接使用固定流地址
+                    container.style.display = 'block';
+                }
+
+                if (camBtn) {
+                    camBtn.textContent = '关闭摄像头';
+                    camBtn.style.background = 'rgba(248, 81, 73, 0.25)';
+                    camBtn.classList.add('active');
+                }
+
+                camOn = true;
+                log(`[硬件] 已连接机器狗摄像头 (cam3)`, 'info');
+            }
+        }
+
+        document.getElementById('dog-cam-select')?.addEventListener('change', () => {
+            if (camOn) {
+                camOn = false;
+                toggleCam();
+            }
+        });
+
+        async function startCam() {
+        try {
+            const devId = selectedCamId || document.getElementById('wiz-cam-sel')?.value || '';
+            const constraints = devId
+            ? {video:{deviceId:{exact:devId}, width:640, height:480}, audio:false}
+            : {video:{width:640, height:480}, audio:false};
+            camStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const video = document.getElementById('cam-video');
+            video.srcObject = camStream;
+            document.getElementById('cam-box').classList.add('active');
+            camOn = true;
+            log(`摄像头已开启 (实时预览, 不消耗API/流量) 设备=${devId ? devId.slice(0,12) : '默认'}`, 'info');
+        } catch(e) {
+            log('摄像头启动失败: ' + e.message, 'error');
+        }
+        }
+
+        function stopCam() {
+        if (camStream) { camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+        document.getElementById('cam-video').srcObject = null;
+        document.getElementById('cam-box').classList.remove('active');
+        camOn = false;
+        log('摄像头已关闭', 'info');
+        }
+
+        async function doVQA() {
+            try {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    log('VQA: 已发送请求，正在抓取固定摄像头 cam3...', 'info');
+                    chat('[拍照识别] 正在请求 AI 进行视觉分析...', 'sys');
+
+                    ws.send(JSON.stringify({
+                        type: 'vqa',   // 必须与 web_app.py 中的 elif cmd_type == "vqa" 对应
+                        cam_id: 3      // 硬编码为 3
+                    }));
+                } else {
+                    log('WebSocket 未连接，无法发送 VQA 请求', 'error');
+                    chat('[拍照识别] 失败: 与机器狗连接已断开', 'sys');
+                }
+            } catch(e) {
+                log('VQA 拍照指令发送失败: ' + e.message, 'error');
+                console.error("VQA error:", e);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  初始化
+        // ═══════════════════════════════════════════════════════════
+        document.getElementById('mic-btn').addEventListener('click', toggleMic);
+        document.getElementById('mic-sel').addEventListener('change', () => {
+        selectedMicId = document.getElementById('mic-sel').value;
+        if (micOn) { stopMic(); startMic(); }
+        });
+
+        (async () => {
+        log('页面加载完成 — 唤醒词功能 v3.0 已启用', 'info');
+        log('休眠状态: isDialogActive=' + isDialogActive + ' (需说"小创小创, 开始对话"激活)', 'event');
+
+        // 在聊天区显示欢迎提示 (休眠状态下的操作指引)
+        chat('欢迎! 对话默认处于休眠状态, 请通过以下方式激活:', 'sys');
+        chat('① 语音说"小创小创, 开始对话"  ② 点击顶部"待唤醒"标签  ③ 直接输入文字发送(自动激活)', 'sys');
+
+        // 先连接后端 WebSocket
+        connectWS();
+
+        // 刷新向导中的设备列表
+        await wizRefreshMics();
+        await wizRefreshSpks();
+        await wizRefreshCams();
+
+        // 同步主界面的麦克风列表
+        await refreshMics();
+
+        // 加载声音列表
+        populateVoices();
+
+        // 声音下拉变化监听
+        const wizVoiceSel = document.getElementById('wiz-voice-sel');
+        if (wizVoiceSel) {
+            wizVoiceSel.addEventListener('change', () => {
+                selectedVoice = document.getElementById('wiz-voice-sel').value;
+                const selected = document.getElementById('wiz-voice-sel').selectedOptions[0];
+                const name = selected ? selected.textContent.split(' ')[0] : selectedVoice;
+                const voiceStatus = document.getElementById('wiz-voice-status');
+                if (voiceStatus) voiceStatus.textContent = '当前声音: ' + name + ' — 可在百炼控制台配置更多声音';
+                if (typeof updateVoiceIndicator === 'function') updateVoiceIndicator();
+                log(`[向导] 声音切换: ${selectedVoice} (${selected ? selected.textContent : ''})`, 'info');
+            });
+        }
+
+        log('请在上方"设备设置"面板中选择并测试你的麦克风、喇叭和摄像头', 'event');
+        log('测试完成后点击"开始对话"按钮即可进入多模态交互', 'event');
+        })();
+
+        window.updateBailianBadge = (isConnected) => {
+            const badge = document.getElementById('api-badge');
+            if (!badge) return;
+            badge.textContent = isConnected ? '百炼已连接' : '百炼未连接';
+            badge.className = isConnected ? 'badge badge-ok' : 'badge badge-err';
+        };
+
+        window.renderDeviceList = (listId, statusId, devices, label) => {
+            const selectEl = document.getElementById(listId);
+            const statusEl = document.getElementById(statusId);
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+
+            if (devices && devices.length > 0) {
+                devices.forEach((dev) => {
+                    const option = document.createElement('option');
+                    option.value = dev.id || dev;
+                    option.textContent = dev.name || dev;
+                    selectEl.appendChild(option);
+                });
+                if (statusEl) { statusEl.textContent = `检测到 ${devices.length} 个${label}`; statusEl.className = 'dev-status'; }
+            } else {
+                const option = document.createElement('option');
+                option.value = 0;
+                option.textContent = `未检测到${label}`;
+                selectEl.appendChild(option);
+                if (statusEl) { statusEl.textContent = `未检测到${label}`; statusEl.className = 'dev-status error'; }
+            }
+        };
+
+        // 強制將這些向導函數暴露給全域 window 物件
+        window.wizStart = wizStart;
+        window.wizSkip = wizSkip;
+        window.closeWizard = closeWizard;
+        window.wizRefreshMics = typeof wizRefreshMics !== 'undefined' ? wizRefreshMics : function(){};
+        window.wizRefreshSpks = typeof wizRefreshSpks !== 'undefined' ? wizRefreshSpks : function(){};
+        window.wizRefreshCams = typeof wizRefreshCams !== 'undefined' ? wizRefreshCams : function(){};
+        window.wizTestMic = typeof wizTestMic !== 'undefined' ? wizTestMic : function(){};
+        window.wizTestSpeaker = typeof wizTestSpeaker !== 'undefined' ? wizTestSpeaker : function(){};
+        window.wizTestCam = typeof wizTestCam !== 'undefined' ? wizTestCam : function(){};
+        window.selectDialogMode = typeof selectDialogMode !== 'undefined' ? selectDialogMode : (typeof selectMode !== 'undefined' ? selectMode : function(){});
+        window.refreshMics = typeof refreshMics !== 'undefined' ? refreshMics : function(){};
+        window.sendTxt = typeof sendTxt !== 'undefined' ? sendTxt : function(){};
+        window.toggleCam = typeof toggleCam !== 'undefined' ? toggleCam : function(){};
+        window.doVQA = typeof doVQA !== 'undefined' ? doVQA : function(){};
+        window.doInterrupt = typeof doInterrupt !== 'undefined' ? doInterrupt : function(){};
+        window.doReconnect = typeof doReconnect !== 'undefined' ? doReconnect : (typeof connectWS !== 'undefined' ? connectWS : function(){});
+        window.clearChat = typeof clearChat !== 'undefined' ? clearChat : function(){};
+        window.setDialogActive = typeof setDialogActive !== 'undefined' ? setDialogActive : function(){};
+        window.showWizard = typeof showWizard !== 'undefined' ? showWizard : function(){};
+        window.wizTestBailian = wizTestBailian;
+        window.playTestTTS = playTestTTS;
+        document.addEventListener('DOMContentLoaded', () => {
+            window.loadTaskDashboard();
+        });
+    </script>
+</body>
+</html>

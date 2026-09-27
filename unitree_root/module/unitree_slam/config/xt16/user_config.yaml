@@ -1,0 +1,4 @@
+network: "eth0"
+ip_address: "192.168.123.20"
+lidar_frame: "rslidar" # string
+lidar_topic: "rt/unitree/slam_lidar/points" # string rt/....

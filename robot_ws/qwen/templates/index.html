@@ -1,0 +1,1992 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:color="http://www.w3.org/1999/xhtml">
+<head>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <meta charset="utf-8">
+    <title>具身智能实验室机器人云平台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --sidebar-bg: rgba(20, 20, 20, 0.8);
+            --accent-color: #3e7bfa;
+            --text-main: #ffffff;
+            --text-dim: #a0a0a0;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            margin: 0; display: flex; height: 100vh; overflow: hidden;
+        }
+
+        /* 侧边栏：毛玻璃效果 */
+        #sidebar {
+            width: 220px; background: var(--sidebar-bg); backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 30px 20px;
+        }
+        #sidebar h2 { font-size: 14px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 40px; text-transform: uppercase; }
+        #sidebar button {
+            width: 100%; padding: 12px; margin-bottom: 8px; cursor: pointer;
+            background: transparent; color: var(--text-dim); border: none;
+            border-radius: 8px; text-align: left; transition: all 0.3s ease; font-weight: 400;
+        }
+        #sidebar button:hover { background: rgba(255,255,255,0.05); color: #fff; }
+        #sidebar button.active { background: var(--accent-color); color: #fff; font-weight: 600; }
+
+        #page-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* 内容区 — 全宽，移除聊天窗口后独占 */
+        #main-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+
+
+        /* 强制所有页面默认隐藏 */
+        .page {
+            display: none !important;
+            min-height: 100%;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        /* 只有 active 类才显示 */
+        .page.active {
+            display: flex !important;
+            flex-direction: column;
+        }
+
+        h3 { font-weight: 400; color: var(--text-dim); margin-bottom: 20px; }
+        .val { color: var(--accent-color); font-weight: 600; font-family: monospace; }
+
+        /* 摄像头网格 */
+        .camera-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .camera-box { background: #000; position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color); aspect-ratio: 16/9; }
+        .camera-stream {width: 100%;height: 100%;object-fit: cover;display: block;}
+        .toggle-btn { position: absolute; top: 15px; right: 15px; border-radius: 20px; padding: 6px 12px; border: none; font-size: 10px; text-transform: uppercase; cursor: pointer; }
+        .off { background: rgba(255,255,255,0.1); color: #aaa; }
+
+        /* 表格优化 */
+        table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
+        th { color: var(--text-dim); font-weight: 400; padding-bottom: 10px; }
+        td { padding: 15px; background: rgba(255,255,255,0.02); }
+        tr td:first-child { border-radius: 8px 0 0 8px; }
+        tr td:last-child { border-radius: 0 8px 8px 0; }
+
+        /* 按钮与UI元素 */
+        button { cursor: pointer; transition: 0.2s; border-radius: 6px; border: none; padding: 8px 16px; }
+        button:hover { opacity: 0.8; }
+
+        /* 终端样式 */
+        #ubuntu-terminal, #openclaw-terminal { height: 500px; border-radius: 12px; overflow: hidden; }
+
+        #toggle-handle {
+            position: fixed;
+            top: 150px;
+            right: 0;
+            width: 35px;
+            height: 40px;
+            background: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px 0 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1001;
+            color: white;
+            transition: right 0.3s ease;
+        }
+
+        /* 当侧边栏打开时，将图标向左移，腾出位置 */
+        #right-sidebar.open + #toggle-handle, /* 如果在HTML中紧邻 */
+        body:has(#right-sidebar.open) #toggle-handle {
+            right: 160px; /* 侧边栏的宽度是多少，这里就设置多少 */
+        }
+
+        /* 确保侧边栏本身的样式 */
+        #right-sidebar {
+            position: fixed;
+            top: 150px;
+            right: -160px; /* 彻底隐藏的距离 */
+            width: 160px;
+            transition: right 0.3s ease;
+            z-index: 1000;
+        }
+
+        #right-sidebar.open {
+            right: 0;
+        }
+
+        /* 顶部工具栏：使用深色卡片感 */
+        .editor-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #111;
+            padding: 16px 24px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* 现代输入框 */
+        .modern-input {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            outline: none;
+            transition: border 0.3s;
+        }
+        .modern-input:focus { border-color: var(--accent-color); }
+
+        /* 任务内容区域 */
+        .editor-main {
+            display: grid;
+            grid-template-columns: 350px 1fr; /* 左侧列表，右侧地图 */
+            gap: 20px;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* 侧边列表卡片 */
+        .point-list-card {
+            background: #111;
+            border-radius: 16px;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* 按钮样式 */
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* 监控面板的容器 */
+        .monitoring-dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* 这里决定了并排，1fr 1fr 表示各占一半 */
+            gap: 20px; /* 卡片之间的间距 */
+            margin-bottom: 20px;
+        }
+
+        /* 确保电压和 IMU 的卡片样式统一 */
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        /* --- 修复弹窗显示问题 --- */
+        /* 确保只有被 JS 控制的弹窗才会显示，防止 CSS 意外覆盖 */
+        #task-config-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+        }
+
+        /* 当 JS 将 display 设置为 flex 时，它才会显示 */
+        #task-config-modal[style*="display: flex"] {
+            display: flex !important;
+        }
+
+        .modal-content {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 16px;
+            width: 350px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        /* 确保地图容器是相对定位，标点才能基于此绝对定位 */
+        #map-interaction-area {
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #000;
+            display: flex;
+        }
+
+        #map-interaction-area canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        /* 强制标点始终在最上层 */
+        .map-marker {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: #00e676;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000 !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+
+            /* 居中显示数字 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+
+            /* 允许点击标点进行后续操作 */
+            pointer-events: auto !important;
+        }
+
+        /* 悬停效果，增加交互感 */
+        .map-marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background-color: #fff;
+            border-color: #00e676;
+        }
+
+        /* --- 地图页样式优化 --- */
+        #map-page {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        /* 优化下拉菜单 */
+        #map-select {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border: 1px solid var(--border-color);
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            width: 300px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        #map-select:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--accent-color);
+        }
+
+        /* 优化地图容器高度 */
+        #map-view-container {
+            flex-grow: 1;
+            min-height: 600px;
+            background: #000;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* 强制覆盖下拉菜单样式 */
+        select {
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            outline: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        select option {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+
+        /* 任务列表容器 */
+        .task-list-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        #task-editor-view {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* 任务卡片样式 */
+        .task-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+        }
+
+        .task-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(62, 123, 250, 0.3);
+        }
+
+        .task-info h4 { margin: 0; color: #fff; font-size: 16px; }
+        .task-info p { margin: 4px 0 0; color: #888; font-size: 12px; }
+
+        /* 操作栏按钮样式 */
+        .task-actions { display: flex; gap: 8px; }
+        .btn-icon {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ccc;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-icon:hover { background: var(--accent-color); color: white; border-color: transparent; }
+
+        /* 坐标文本颜色 */
+        .coord-text {
+            font-family: 'Courier New', Courier, monospace; /* 等宽字体看数字更清晰 */
+            color: #555;
+            font-weight: bold;
+        }
+
+        /* 电机卡片网格容器 */
+        .motor-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            max-height: 130px;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .motor-grid.expanded {
+            max-height: 600px;
+        }
+
+        /* 单个电机卡片 */
+        .motor-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            transition: all 0.3s ease;
+        }
+
+        /* 异常状态高亮 */
+        .motor-card.lost {
+            border-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        /* 字体排版 */
+        .motor-card .id { font-size: 18px; font-weight: bold; color: var(--accent-color); margin-bottom: 5px; }
+        .motor-card .data-row { display: flex; justify-content: space-between; font-size: 11px; margin: 2px 0; }
+        .motor-card .label { color: #888; }
+
+        /* 路径点位列表容器 */
+        #sub-task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* 单个点位卡片 */
+        .point-row {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: background 0.2s;
+        }
+
+        .point-row:hover { background: rgba(255, 255, 255, 0.08); }
+
+        /* 序号徽章 */
+        .point-index {
+            background: var(--accent-color);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* 坐标样式 */
+        .point-coord {
+            font-family: 'Courier New', monospace;
+            color: #888;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        /* 按钮微调 */
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+
+        .zoom-wrapper {
+            position: relative;
+            border-radius: 12px;
+            background: #000;
+            height: 200px;
+            overflow: hidden;
+        }
+
+        .mode-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-dim);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .mode-btn.active {
+            background: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(62, 123, 250, 0.4);
+        }
+
+        .map-stream {
+            width: 100%;
+            height: 500px;
+            border: none;
+            overflow: hidden;
+            transform: scale(0.9);
+            transform-origin: top left;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .overlay img {
+            max-width: 90%;
+            max-height: 90%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #wiz-mic-sel, #wiz-spk-sel {
+            width: 250px;
+            max-width: 250px;
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 500; display: inline-block; }
+        .badge-ok { background: #238636; color: #fff; }
+        .badge-err { background: #da3633; color: #fff; }
+        .badge-warn { background: #9e6a03; color: #fff; }
+        .badge-info { background: #1f6feb; color: #fff; }
+        .badge-idle { background: rgba(255,255,255,0.1); color: #ccc; }
+
+        .msg { max-width: 90%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; word-break: break-word; margin-bottom: 6px; animation: aiFadeIn .2s; }
+        @keyframes aiFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+        .msg.user { align-self: flex-end; background: #1f6feb; color: #fff; border-bottom-right-radius: 4px; }
+        .msg.ai { align-self: flex-start; background: rgba(255,255,255,0.04); border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.08); }
+        .msg.sys { align-self: center; color: #888; font-size: 11px; background: transparent; padding: 4px; }
+        .msg .label { font-size: 11px; margin-bottom: 2px; opacity: .6; }
+        .msg.ai .label { color: #58a6ff; opacity: 1; }
+        .msg .streaming { font-style: italic; opacity: .7; }
+
+        .mic-btn.active { background: #1f6feb; border-color: #58a6ff; box-shadow: 0 0 15px rgba(88,166,255,.3); }
+        .mic-btn.active::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #58a6ff; animation: aiPulse 1.5s infinite; }
+        @keyframes aiPulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(1.4); opacity: 0; } }
+
+        .state-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+        .state-dot.idle { background: #888; }
+        .state-dot.listening { background: #3fb950; }
+        .state-dot.thinking { background: #d29922; animation: aiBlink 1s infinite; }
+        .state-dot.responding { background: #bc8cff; animation: aiBlink .6s infinite; }
+        .state-dot.disconnected { background: #f85149; }
+        @keyframes aiBlink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+        /* 設置向導彈窗優化 (限制寬度) */
+        .wizard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: aiFadeIn .3s; }
+        .wizard-overlay.hidden { display: none; }
+        .wizard { background: #161b22; border: 1px solid #30363d; border-radius: 16px; width: 480px; max-width: 95vw; max-height: 85vh; overflow-y: auto; padding: 20px; color: #e6edf3; box-shadow: 0 16px 48px rgba(0,0,0,.4); }
+        .wizard h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; color: #fff; }
+        .dev-section { background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+        .dev-section h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #fff; }
+        .meter-bar { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        .meter-bar .fill { height: 100%; background: #3fb950; width: 0%; }
+        .wizard-cam video { width: 100%; max-height: 140px; object-fit: contain; }
+        .mode-toggle { display: flex; gap: 8px; margin-top: 8px; }
+        .mode-card { flex: 1; padding: 10px; border: 2px solid #30363d; border-radius: 8px; cursor: pointer; font-size: 11px; }
+        .mode-card.selected { border-color: #58a6ff; background: rgba(88,166,255,0.08); }
+        .wake-toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.8); z-index: 11000; padding: 15px 30px; border-radius: 12px; font-size: 20px; font-weight: 700; pointer-events: none; opacity: 0; transition: all 0.3s ease; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+        .wake-toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+        .wake-toast.wake { background: linear-gradient(135deg,#238636,#2ea043); color: #fff; }
+        .wake-toast.sleep { background: linear-gradient(135deg,#9e6a03,#d29922); color: #fff; }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.140.2/build/three.module.js",
+            "three/examples/jsm/": "https://unpkg.com/three@0.140.2/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="toggle-handle" onclick="document.getElementById('right-sidebar').classList.toggle('open')">☰</div>
+    <div id="right-sidebar">
+        <button class="mode-btn" onclick="selectMode(this)">全交互</button>
+        <button class="mode-btn" onclick="selectMode(this)">电脑端</button>
+        <button class="mode-btn" onclick="selectMode(this)">飞书手机端</button>
+        <button class="mode-btn" onclick="selectMode(this)">语音交互</button>
+    </div>
+
+    <nav id="sidebar">
+        <h2>具身智能实验室机器人云平台</h2>
+        <button id="btn-monitor" class="active" onclick="showPage('monitor')">实时监控</button>
+        <button id="btn-map" onclick="showPage('map')">地图查看</button>
+        <button id="btn-tasks" onclick="showPage('tasks')">任务管理</button>
+        <button id="btn-terminal" onclick="showPage('terminal')">机器人终端</button>
+        <button id="btn-openclaw" onclick="showPage('openclaw')">Openclaw 终端</button>
+    </nav>
+    <div id="page-container">
+        <main id="main-content">
+            <div id="monitor-page" class="page active">
+                <div class="section">
+                    <h3>镜头画面</h3>
+                    <div class="camera-container">
+                        <div class="camera-box">
+                            <div class="camera-title">深度相机 1</div>
+                            <img id="stream1" class="camera-stream" alt="">
+                            <button class="toggle-btn off" onclick="toggleSub('cam1', this)">OFF</button>
+                        </div>
+                        <div class="camera-box">
+                            <div class="camera-title">深度相机 2</div>
+                            <img id="stream2" class="camera-stream" alt="">
+                            <button class="toggle-btn off" onclick="toggleSub('cam2', this)">OFF</button>
+                        </div>
+                        <div class="camera-box">
+                            <div class="camera-title">机器狗相机</div>
+                            <img id="stream3" class="camera-stream" alt="">
+                            <button class="toggle-btn off" onclick="toggleSub('cam3', this)">OFF</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h3>巡航路线</h3>
+                    <button onclick="refreshRviz()" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                        刷新
+                    </button>
+                    <div class="map-container">
+                        <iframe id="rviz-iframe"
+                                src=""
+                                class="map-stream"
+                                style="width: 105%; height: 800px; border: none;">
+                        </iframe>
+                    </div>
+                </div>
+                <div class="section">
+                    <h3>系统状态</h3>
+                    <div class="monitoring-dashboard">
+                        <div class="dashboard-card">
+                            <p>电压: <span id="v" class="val">-</span> V | 电流: <span id="a" class="val">-</span> A</p>
+                            <p>电池 SoC: <span id="soc" class="val">-</span>% | NTC: <span id="ntc1" class="val">-</span>°C</p>
+                            <p>Tick: <span id="tick" class="val">-</span></p>
+
+                            <div class="volume-control-wrapper">
+                                <button id="mute-btn" onclick="toggleMute()" class="icon-btn">音量</button>
+
+                                <input type="range" id="volume-slider" min="0" max="100" value="50"
+                                       oninput="updateVolumeLabel(this.value)"
+                                       onchange="sendVolumeCommand(this.value)">
+
+                                <span id="volume-val">50%</span>
+                            </div>
+                        </div>
+                        <div class="dashboard-card">
+                            <p>姿态 (Quat): <span id="imu_quat" class="val">0,0,0,1</span></p>
+                            <p>角速度 (Gyro): <span id="imu_gyro" class="val">0,0,0</span></p>
+                            <p>线加速度 (Accel): <span id="imu_acc" class="val">0,0,0</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>电机详细数据</h3>
+                        <button id="toggle-motor-btn" onclick="toggleMotorDisplay()" style="background:transparent; border:1px solid #444; color:#888;">展开全部</button>
+                    </div>
+                    <div id="motor-grid" class="motor-grid"></div>
+                </div>
+            </div>
+
+            <div id="map-page" class="page">
+                <h3>地图选择 (2D 正交视图)</h3>
+                <select id="map-select" onchange="loadMapToContainer(this.value, 'map-view-container')">
+                    <option value="">-- 请选择地图 --</option>
+                </select>
+                <div id="map-view-container"></div>
+            </div>
+
+            <div id="tasks-page" class="page">
+                <div id="task-list-view">
+                    <div class="editor-toolbar" style="background:transparent; padding:0; border:none;">
+                        <h3>任务管理中心</h3>
+                        <button onclick="openEditor(null)" class="btn-primary">+ 新增任务</button>
+                    </div>
+                    <div id="task-main-table-container"></div>
+                </div>
+
+                <div id="task-editor-view">
+                    <div class="editor-toolbar">
+                        <div>
+                            <input type="text" id="edit-task-name" class="modern-input" placeholder="输入任务名称...">
+                            <select id="edit-task-type" class="modern-input" style="margin-left: 10px;">
+                                <option value="巡逻">巡逻</option>
+                                <option value="取放">取放</option>
+                                <option value="导赏">导赏</option>
+                            </select>
+
+                            <select id="edit-task-operation-mode" class="modern-input" style="margin-left: 10px;" onchange="toggleTaskOperationMode(this.value)">
+                                <option value="mark">标点模式</option>
+                                <option value="select">选点模式</option>
+                            </select>
+                        </div>
+                        <select id="editor-map-select" onchange="handleMapChange(this.value)">
+                            <option value="">-- 选择编辑地图 --</option>
+                        </select>
+                        <div style="display:flex; gap: 10px;">
+                            <button onclick="closeEditor()" class="icon-btn"><i data-lucide="x"></i> 取消</button>
+                            <button onclick="saveTask()" class="btn-primary"><i data-lucide="check"></i> 保存任务</button>
+                        </div>
+                    </div>
+
+                    <div class="editor-main">
+                        <div class="point-list-card">
+                            <h4 style="margin-top:0;">路径点位</h4>
+                            <div id="sub-task-list"></div>
+                        </div>
+
+                        <div id="map-interaction-area" style="border-radius: 16px; position: relative;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="terminal-page" class="page">
+                <h3>机器人控制终端 (Ubuntu)</h3>
+                <div id="ubuntu-terminal"></div>
+            </div>
+
+            <div id="openclaw-page" class="page">
+                <h3>Openclaw 控制台</h3>
+                <div id="openclaw-terminal"></div>
+            </div>
+        </main>
+    </div>
+    <div id="task-start-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:#1a1a1a; padding:30px; border-radius:12px; border:1px solid #444; width:300px; text-align:center;">
+            <h3 style="margin-top:0; color:#fff;">请选择任务模式</h3>
+            <p style="color:#aaa; font-size:14px;">即将启动任务，请选择运行模式</p>
+
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:20px;">
+                <button onclick="window.selectAndStartTask('marking')" style="padding:12px; background:#3e7bfa; border:none; color:white; border-radius:6px; cursor:pointer;">标点模式 (标准导航)</button>
+                <button onclick="window.selectAndStartTask('selection')" style="padding:12px; background:#e91e63; border:none; color:white; border-radius:6px; cursor:pointer;">选点模式 (带动作路径)</button>
+                <button onclick="document.getElementById('task-start-modal').style.display='none'" style="padding:10px; background:transparent; border:1px solid #444; color:#888; cursor:pointer; margin-top:10px;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+        (function() {
+            if (!window.scene) {
+                window.scene = new THREE.Scene();
+            }
+            if (!window.renderer) {
+                window.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                window.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        })();
+
+        // 配置后端 IP (请确保此处 IP 与你的 server.py 运行环境一致)
+        const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
+
+        // 初始化 SocketIO
+        const socket = io(BACKEND_URL);
+
+        function safeSetText(id, value, fallback = '') {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value || fallback;
+            } else {
+                console.warn(`[UI Warning] 页面缺少元素 ID: ${id}，无法设置值: ${value}`);
+            }
+        }
+
+        function sendTestCommand(type, deviceId) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: "test_device",
+                    device_type: type, // "mic", "speaker", "cam"
+                    device_id: deviceId
+                }));
+                console.log(`[向导] 发送测试指令: ${type}, ID: ${deviceId}`);
+            } else {
+                alert("WebSocket 未连接，无法测试硬件！");
+            }
+        }
+
+        window.refreshRviz = () => {
+            const iframe = document.getElementById('rviz-iframe');
+            if (iframe) {
+                // 保存当前的 src
+                const currentSrc = iframe.src;
+                // 简单粗暴的刷新方式：重置 src
+                console.log("[UI] 正在刷新巡航路线 iframe...");
+                iframe.src = "";
+                setTimeout(() => {
+                    iframe.src = currentSrc;
+                }, 100); // 给一点点延迟，确保重载
+            } else {
+                console.error("[UI Error] 未找到 rviz-iframe 元素");
+            }
+        };
+
+        function truncateText(fullText, limit = 20) {
+            if (fullText.length <= limit) return fullText;
+            return fullText.substring(0, 10) + "..." + fullText.substring(fullText.length - 8);
+        }
+
+        function updateDeviceList(selectId, devices) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = ''; // 清空
+
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.id;
+                option.textContent = truncateText(device.name || device.id);
+                option.title = device.id;
+
+                select.appendChild(option);
+            });
+        }
+
+        window.stopAllStreams = () => {
+            const streamIds = ['stream1', 'stream2', 'stream3'];
+            streamIds.forEach(id => {
+                const img = document.getElementById(id);
+                if (img) {
+                    img.src = "";
+                }
+            });
+
+            document.querySelectorAll('.camera-box .toggle-btn').forEach(btn => {
+                btn.classList.remove('on');
+                btn.classList.add('off');
+                btn.innerText = 'OFF';
+            });
+            console.log("[UI] 所有视频流连接已强制关闭");
+        };
+
+        window.toggleChatWindow = (isVisible) => {
+            const chatWindow = document.getElementById('chat-window');
+            if (chatWindow) {
+                chatWindow.style.display = isVisible ? 'flex' : 'none';
+                setTimeout(() => {
+                    window.updateMapResolution();
+                }, 50);
+            }
+        };
+
+        window.clearScene = () => {
+            console.log("[Global] 正在执行全场景清理...");
+            const toRemove = [];
+            window.scene.children.forEach((obj) => {
+                // 只要是 Sprite 或 Points，统统加入删除队列
+                if (obj.isSprite || obj.isPoints) {
+                    toRemove.push(obj);
+                }
+            });
+
+            toRemove.forEach((obj) => {
+                window.scene.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                    if (obj.material.map) obj.material.map.dispose();
+                }
+            });
+            console.log(`[Global] 清理完成，移除了 ${toRemove.length} 个对象。`);
+        };
+
+        window.reparentRenderer = (targetContainerId) => {
+            const container = document.getElementById(targetContainerId);
+            if (!container) return;
+
+            // 如果已经在当前容器中，直接返回
+            if (renderer.domElement.parentElement === container) {
+                window.updateMapResolution(); // 确保尺寸正确
+                return;
+            }
+
+            // 移动 Canvas
+            container.appendChild(renderer.domElement);
+            console.log(`[Renderer] 已将 Canvas 移动到: ${targetContainerId}`);
+
+            // 强制触发一次尺寸更新
+            window.updateMapResolution();
+        };
+
+        // 页面切换
+        window.showPage = (pageName) => {
+            const activePage = document.querySelector('.page.active');
+            if (activePage && activePage.id === 'monitor-page' && pageName !== 'monitor') {
+                window.stopAllStreams();
+            }
+
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+            });
+
+            document.querySelectorAll('#sidebar button').forEach(b => {
+                b.classList.remove('active');
+            });
+
+            const target = document.getElementById(pageName + '-page');
+            if (target) {
+                target.classList.add('active');
+            }
+
+            const btn = document.getElementById('btn-' + pageName);
+            if (btn) {
+                btn.classList.add('active');
+            }
+
+            if (pageName === 'tasks') {
+                const listView = document.getElementById('task-list-view');
+                const editorView = document.getElementById('task-editor-view');
+
+                if (listView) listView.style.display = 'block';
+                if (editorView) editorView.style.display = 'none';
+            }
+
+            if (pageName === 'map' && typeof renderer !== 'undefined') {
+                window.clearScene();
+                window.reparentRenderer('map-view-container');
+                setTimeout(() => {
+                    const cont = document.getElementById('map-view-container');
+                    if (cont) {
+                        renderer.setSize(cont.clientWidth, cont.clientHeight);
+                        camera.aspect = cont.clientWidth / cont.clientHeight;
+                        camera.updateProjectionMatrix();
+                    }
+                }, 100);
+            }
+        };
+
+        // --- 摄像头控制逻辑 ---
+        window.toggleSub = (camId, btn) => {
+            btn.classList.toggle('on');
+            btn.classList.toggle('off');
+            const isActive = btn.classList.contains('on');
+            btn.innerText = isActive ? 'ON' : 'OFF';
+            const img = document.getElementById(camId === 'cam3' ? 'stream3' : (camId === 'cam2' ? 'stream2' : 'stream1'));
+            img.src = isActive ? `${BACKEND_URL}/video_feed/${camId}` : "";
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const iframe = document.getElementById('rviz-iframe');
+            const dynamicSrc = `${BACKEND_URL}/lab/all/go2.html`;
+
+            // 加载前设置一个占位提示或样式
+            iframe.style.opacity = '0';
+            iframe.style.transition = 'opacity 0.3s ease';
+
+            console.log("正在加载 iframe 地址:", dynamicSrc);
+            iframe.src = dynamicSrc;
+
+            // 当 iframe 加载完成时，渐显出来
+            iframe.onload = () => {
+                iframe.style.opacity = '1';
+                console.log("地图加载完成");
+            };
+
+            // 错误处理：如果地址错误，给予反馈
+            iframe.onerror = () => {
+                console.error("无法加载地图页面");
+                iframe.srcdoc = "<div style='color:red; padding:20px;'>地图加载失败，请检查网络或后端服务。</div>";
+            };
+        });
+
+        // --- 遥测数据处理 (SocketIO 接收) ---
+        socket.on('telemetry_data', (msg) => {
+
+            try {
+                if (msg.power_v !== undefined) {
+                    document.getElementById('v').innerText = (msg.power_v || 0).toFixed(2);
+                    document.getElementById('a').innerText = (msg.power_a || 0).toFixed(2);
+                    document.getElementById('soc').innerText = msg.bms_state?.soc || 0;
+                    document.getElementById('ntc1').innerText = msg.temperature_ntc1 || 0;
+                    document.getElementById('tick').innerText = msg.tick || 0;
+                } else {
+                    console.warn("未找到基础数据字段");
+                }
+
+                if (msg.imu_state) {
+                    document.getElementById('imu_quat').innerText = msg.imu_state.quaternion?.map(x => x.toFixed(3)).join(', ') || '-';
+                    document.getElementById('imu_gyro').innerText = msg.imu_state.gyroscope?.map(x => x.toFixed(3)).join(', ') || '-';
+                    document.getElementById('imu_acc').innerText = msg.imu_state.accelerometer?.map(x => x.toFixed(3)).join(', ') || '-';
+                }
+
+                // 3. 更新电机表数据
+                if (msg.motor_state && Array.isArray(msg.motor_state)) {
+                    msg.motor_state.forEach((m, i) => {const card = document.getElementById(`m${i}-card`);
+                        if (!card) return;
+                        if (m.lost !== 0) card.classList.add('lost');
+                        else card.classList.remove('lost');
+
+                        document.getElementById(`m${i}-q`).innerText = m.q.toFixed(2);
+                        document.getElementById(`m${i}-dq`).innerText = m.dq.toFixed(2);
+                        document.getElementById(`m${i}-tau`).innerText = m.tau_est.toFixed(2);
+                        document.getElementById(`m${i}-temp`).innerText = m.temperature + '°C';
+                    });
+                }
+
+            } catch (err) {
+                console.error("!!! 更新数据时发生错误:", err);
+            }
+        });
+
+        // 初始化电机表
+        const grid = document.getElementById('motor-grid');
+        for (let i = 0; i < 16; i++) {
+            grid.innerHTML += `
+                <div class="motor-card" id="m${i}-card">
+                    <div class="id">M${i}</div>
+                    <div class="data-row"><span class="label">位置</span><span id="m${i}-q">-</span></div>
+                    <div class="data-row"><span class="label">速度</span><span id="m${i}-dq">-</span></div>
+                    <div class="data-row"><span class="label">扭矩</span><span id="m${i}-tau">-</span></div>
+                    <div class="data-row"><span class="label">温度</span><span id="m${i}-temp">-</span></div>
+                </div>
+            `;
+        }
+
+        window.toggleMotorDisplay = () => {
+            const grid = document.getElementById('motor-grid');
+            const btn = document.getElementById('toggle-motor-btn');
+            grid.classList.toggle('expanded');
+            btn.innerText = grid.classList.contains('expanded') ? '收回' : '展开全部';
+        };
+
+        // 音量调节逻辑
+        let isMuted = false;
+
+        window.updateVolumeLabel = (val) => {
+            document.getElementById('volume-val').innerText = val + "%";
+        };
+
+        window.sendVolumeCommand = (val) => {
+            console.log("发送音量设置:", val);
+            socket.emit('volume_control', { volume: val });
+        };
+
+        window.toggleMute = () => {
+            isMuted = !isMuted;
+            const btn = document.getElementById('mute-btn');
+            btn.innerText = isMuted ? '静音' : '音量';
+            socket.emit('mute_toggle', { muted: isMuted });
+        };
+
+        let currentMuted = false;
+
+        socket.on('audio_status_update', (data) => {
+            console.log("收到音频状态同步:", data);
+
+            const slider = document.getElementById('volume-slider');
+            const valSpan = document.getElementById('volume-val');
+            slider.value = data.volume;
+            valSpan.innerText = data.volume + "%";
+            currentMuted = data.muted;
+            const btn = document.getElementById('mute-btn');
+            btn.innerText = currentMuted ? '静音' : '音量';
+        });
+
+        window.openImage = (src) => {
+            const overlay = document.getElementById('image-overlay');
+            const overlayImg = document.getElementById('overlay-img');
+            overlayImg.src = src;
+            overlay.style.display = 'flex';
+        };
+
+        window.closeImage = () => {
+            document.getElementById('image-overlay').style.display = 'none';
+        };
+
+        socket.on('connect', () => {
+            const lastDevice = localStorage.getItem('lastAudioDevice');
+            if (lastDevice) {
+                socket.emit('set_audio_device', { device: lastDevice });
+            }
+            console.log("WebSocket 连接成功，请求音频状态...");
+            socket.emit('request_audio_status', {});
+            socket.emit('request_history', { id: 'ubuntu' });
+            socket.emit('request_history', { id: 'openclaw' });
+        });
+
+        // --- 地图渲染 ---
+        const cont = document.getElementById('map-view-container');
+        const scene = new THREE.Scene();
+        window.scene = scene || window.scene || new THREE.Scene();
+        window.renderer = window.renderer || new THREE.WebGLRenderer({ antialias: true });
+        scene.background = new THREE.Color(0x000000);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 50, 50);
+        camera.up.set(0, 0, -1);
+        camera.lookAt(0, 0, 0);
+        cont.appendChild(renderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableRotate = false;
+        controls.enablePan = true;
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        document.getElementById('map-select').onchange = (e) => {
+            if (!e.target.value) return;
+
+            // 显式确保使用全局场景
+            if (!window.scene) {
+                console.error("全局 window.scene 不存在！");
+                return;
+            }
+
+            // 2. 正确的清理逻辑：先收集，再删除
+            const toRemove = [];
+            scene.traverse(obj => {
+                if (obj instanceof THREE.Points && obj.name !== 'task-marker') {
+                    toRemove.push(obj);
+                }
+            });
+
+            // 遍历删除并释放内存
+            toRemove.forEach(obj => {
+                scene.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    // 如果材质是数组，则需遍历释放
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+
+            // 3. 加载新地图
+            new PCDLoader().load(`${BACKEND_URL}/map/${e.target.value}`, (pts) => {
+                pts.rotation.x = -Math.PI / 2;
+                pts.material.color.set(0xffffff);
+                pts.material.size = 0.1;
+                pts.material.sizeAttenuation = true;
+
+                window.scene.add(pts);
+
+                pts.geometry.computeBoundingSphere();
+                if (pts.geometry.boundingSphere) {
+                    const c = pts.geometry.boundingSphere.center;
+                    camera.position.set(c.x, c.y + 50, c.z);
+                    camera.lookAt(c.x, c.y, c.z);
+                    controls.target.set(c.x, c.y, c.z);
+                    controls.update();
+                }
+            }, undefined, (err) => {
+                console.error("加载地图失败:", err);
+            });
+        };
+
+        const populateMapDropdowns = (files) => {
+            const selectIds = ['map-select', 'editor-map-select'];
+
+            selectIds.forEach(id => {
+                const selectElement = document.getElementById(id);
+                if (!selectElement) return;
+
+                selectElement.innerHTML = '<option value="">-- 请选择地图 --</option>';
+
+                files.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f;
+                    opt.innerText = f;
+                    selectElement.appendChild(opt);
+                });
+            });
+        };
+
+        fetch(`${BACKEND_URL}/files`)
+            .then(r => r.json())
+            .then(files => {
+                populateMapDropdowns(files);
+            })
+            .catch(err => console.error("获取地图列表失败:", err));
+
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+        animate();
+
+        // --- 终端逻辑 ---
+        const termUbuntu = new Terminal({ fontSize: 14, theme: { background: '#000' } });
+        const termOpenclaw = new Terminal({ fontSize: 14, theme: { background: '#000' } });
+        termUbuntu.open(document.getElementById('ubuntu-terminal'));
+        termOpenclaw.open(document.getElementById('openclaw-terminal'));
+
+        socket.on('output', (data) => {
+            if (data.id === 'ubuntu') termUbuntu.write(data.data);
+            if (data.id === 'openclaw') termOpenclaw.write(data.data);
+        });
+
+        socket.on('disconnect', () => {
+            console.warn("⚠️ WebSocket 断开连接");
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error("❌ 连接错误:", err.message);
+        });
+
+        termUbuntu.onData(data => {
+            console.log("前端尝试发送输入:", JSON.stringify(data));
+            socket.emit('input', { id: 'ubuntu', command: data });
+        });
+        termOpenclaw.onData(data => { socket.emit('input', { id: 'openclaw', command: data }); });
+
+        window.selectMode = (clickedBtn) => {
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            clickedBtn.classList.add('active');
+
+            const modeMap = {
+                "全交互": "all",
+                "电脑端": "terminal",
+                "飞书手机端": "feishu",
+                "语音交互": "voice"
+            };
+
+            const modeKey = modeMap[clickedBtn.innerText];
+            console.log("正在尝试切换至模式:", modeKey);
+
+            socket.emit('switch_mode', { mode: modeKey });
+        };
+
+        socket.on('mode_status', (data) => {
+            if (data.status === 'success') {
+                console.log("模式切换成功:", data.message);
+            } else {
+                alert("切换失败: " + data.message);
+            }
+        });
+
+        window.loadMapToContainer = (mapFileName, containerId) => {
+            console.log("[Debug] loadMapToContainer 开始执行，正在清理场景...");
+            console.log(containerId)
+
+            if (!window.scene) window.scene = new THREE.Scene();
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            // 1. 收集所有要删除的对象 (先收集，后删除，防止数组索引偏移)
+            const toRemove = [];
+            window.scene.children.forEach((obj) => {
+                if (obj.name === 'task-marker' || obj.isPoints) {
+                    toRemove.push(obj);
+                }
+            });
+
+            // 2. 执行删除
+            toRemove.forEach((obj) => {
+                window.scene.remove(obj);
+
+                // 销毁几何体/材质
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                    if (obj.material.map) obj.material.map.dispose();
+                }
+            });
+
+            console.log(`[Debug] 清理完成，移除了 ${toRemove.length} 个对象。`);
+
+            // 3. 确保 Canvas 挂载
+            if (!container.contains(renderer.domElement)) {
+                container.appendChild(renderer.domElement);
+            }
+
+            new PCDLoader().load(`${BACKEND_URL}/map/${mapFileName}`, (pts) => {
+                pts.rotation.x = -Math.PI / 2;
+                pts.material.size = 0.1;
+                pts.material.sizeAttenuation = true;
+                pts.material.color.set(0xffffff);
+                window.scene.add(pts);
+
+                pts.geometry.computeBoundingSphere();
+                const c = pts.geometry.boundingSphere.center;
+                camera.position.set(c.x, c.y + 50, c.z);
+                camera.lookAt(c.x, c.y, c.z);
+                controls.target.set(c.x, c.y, c.z);
+                controls.update();
+                window.renderMarkersForTask();
+            },
+            undefined,
+            (err) => {
+                console.error("地图加载失败，可能是路径或内存残留问题:", err);
+            });
+        };
+
+        window.updateMapResolution = () => {
+            const container = document.getElementById('map-interaction-area');
+            if (!container) return;
+
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            if (width > 0 && height > 0) {
+                if (typeof camera !== 'undefined') {
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+                }
+                if (typeof renderer !== 'undefined') {
+                    renderer.setSize(width, height);
+                }
+            }
+        };
+
+        window.addEventListener('resize', () => {
+            window.updateMapResolution();
+        });
+
+        // 全局变量区
+        window.allTasks = [];
+        window.editingTask = null;
+        window.tempPoint = null;
+        window.isAddingMode = false;
+        window.taskOperationMode = 'mark';
+        window.selectedPointIndices = [];
+
+        window.toggleTaskOperationMode = (mode) => {
+            window.taskOperationMode = mode;
+            window.selectedPointIndices = [];
+
+            console.log("操作模式已切换为:", mode === 'select' ? "选点模式" : "标点模式");
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        };
+
+        window.updatePointAction = (arrIndex, newAction) => {
+            if (window.selectedPointIndices[arrIndex]) {
+                window.selectedPointIndices[arrIndex].action = newAction;
+                window.renderSubTaskList();
+                console.log(`点位 ${window.selectedPointIndices[arrIndex].index} 已设置为: ${newAction}`);
+            }
+        };
+
+        renderer.domElement.addEventListener('click', (event) => {
+            if (!window.isAddingMode) return;
+
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(
+                (event.offsetX / renderer.domElement.clientWidth) * 2 - 1,
+                -(event.offsetY / renderer.domElement.clientHeight) * 2 + 1
+            );
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(window.scene.children, true);
+            if (intersects.length > 0) {
+                const p = intersects[0].point;
+                window.tempPoint = { x: p.x, y: p.y, z: p.z };
+                document.getElementById('task-config-modal').style.display = 'flex';
+            }
+        });
+
+        window.renderMarkersForTask = () => {
+            const targetScene = window.scene || (typeof scene !== 'undefined' ? scene : null);
+            if (!targetScene) return;
+
+            // 清除旧标点
+            const markersToRemove = [];
+            targetScene.traverse(obj => {
+                if (obj.name === 'task-marker') markersToRemove.push(obj);
+            });
+            markersToRemove.forEach(obj => {
+                targetScene.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                    else obj.material.dispose();
+                }
+            });
+
+            if (window.editingTask && window.editingTask.points) {
+                window.editingTask.points.forEach((p, index) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 64; canvas.height = 64;
+                    const ctx = canvas.getContext('2d');
+
+                    // 根据模式和是否被选中决定颜色
+                    let isSelected = (window.taskOperationMode === 'select' &&
+                          window.selectedPointIndices.some(item => item.index === index));
+                    ctx.fillStyle = isSelected ? '#e91e63' : '#00ff00'; // 选中为粉红色，未选为绿色
+
+                    ctx.beginPath(); ctx.arc(32, 32, 20, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = 'black'; ctx.font = '24px Arial'; ctx.textAlign = 'center';
+                    ctx.fillText((index + 1).toString(), 32, 40);
+
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                    const sprite = new THREE.Sprite(material);
+
+                    sprite.name = 'task-marker';
+                    sprite.userData = { index: index };
+                    sprite.scale.set(2, 2, 1);
+                    sprite.position.set(p.x, 0.5, p.z);
+
+                    targetScene.add(sprite);
+                });
+            }
+        };
+
+        window.editingPointId = null;
+
+        window.updatePointField = (index, field, value) => {
+            const p = window.editingTask.points[index];
+
+            if (p) {
+                p[field] = value;
+                if (field === 'type' && value !== '广播') {
+                    delete p.tts_text;
+                }
+
+                window.renderSubTaskList();
+                window.renderMarkersForTask();
+            }
+        };
+
+        window.savePointType = (pid, newType) => {
+            const p = window.editingTask.points.find(x => x.id === pid);
+            if (p) p.type = newType;
+            window.renderSubTaskList();
+        };
+
+        window.cancelAddPoint = () => {
+            window.isAddingMode = false;
+            const btn = document.getElementById('add-point-btn');
+            if(btn) btn.innerText = "添加任务点";
+            console.log("已取消添加模式");
+        };
+
+        window.closeModal = () => {
+            const modal = document.getElementById('task-config-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                window.isAddingMode = false;
+            }
+        };
+
+        window.taskState = window.taskState || { fileId: null, isRunning: false, isPaused: false };
+
+        window.loadTaskDashboard = async () => {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/get_all_tasks`);
+                if (!response.ok) throw new Error("获取任务列表失败");
+                const tasks = await response.json();
+                window.allTasks = tasks;
+
+                const container = document.getElementById('task-main-table-container');
+                if (!container) return;
+
+                container.innerHTML = `
+                    <div class="task-list-grid">
+                        ${tasks.map(t => {
+                            const isTarget = (window.taskState.fileId === t.file_id);
+                            const isRunning = (isTarget && window.taskState.isRunning);
+                            const isPaused = (isTarget && window.taskState.isPaused);
+
+                            // --- 修改部分：根据运行状态决定是否显示编辑和删除按钮 ---
+                            const editDeleteButtons = !isRunning ? `
+                                <button onclick="openEditor('${t.file_id}')" class="btn-icon"><i data-lucide="edit-2"></i></button>
+                                <button onclick="deleteTask('${t.file_id}')" class="btn-icon" style="color: #f44336;"><i data-lucide="trash-2"></i></button>
+                            ` : '';
+
+                            // 逻辑按钮组判断
+                            let controlButtons = '';
+                            if (!isRunning) {
+                                controlButtons = `<button onclick="handleTaskAction('start_task', '${t.file_id}')" class="btn-icon" style="color: #4caf50;"><i data-lucide="play"></i></button>`;
+                            } else {
+                                const pauseIcon = isPaused ? 'play' : 'pause';
+                                const pauseAction = isPaused ? 'resume_task' : 'pause_task';
+
+                                controlButtons = `
+                                    <button onclick="handleTaskAction('${pauseAction}', '${t.file_id}')" class="btn-icon" style="color: #ff9800;">
+                                        <i data-lucide="${pauseIcon}"></i>
+                                    </button>
+                                    <button onclick="handleTaskAction('stop_task', '${t.file_id}')" class="btn-icon" style="color: #f44336;">
+                                        <i data-lucide="square"></i>
+                                    </button>
+                                `;
+                            }
+
+                            return `
+                            <div class="task-card">
+                                <h4>${t.name}</h4>
+                                <div class="task-actions" style="display: flex; gap: 8px;">
+                                    ${editDeleteButtons}
+                                    ${controlButtons}
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } catch (err) {
+                console.error("加载任务列表出错:", err);
+            }
+        };
+
+        socket.on('task_finished', (data) => {
+            console.log("✅ 收到后端任务结束通知:", data);
+            if (window.taskState.fileId === data.fileId) {
+                window.taskState.fileId = null;
+                window.taskState.isRunning = false;
+                window.taskState.isPaused = false;
+                window.loadTaskDashboard();
+
+                console.log(`任务 [${data.fileId}] 已顺利执行完毕`);
+            }
+        });
+
+        window.loadTaskForMap = async (fileId) => {
+            const cleanId = fileId.replace(/\.pcd$/, '').replace(/\.json$/, '');
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/get_task/${cleanId}`);
+                if (!response.ok) throw new Error("服务器未找到该任务文件");
+                const data = await response.json();
+
+                window.editingTask = {
+                    id: cleanId,
+                    name: data.name || cleanId,
+                    points: (data.points || []).map(p => ({
+                        x: p.x, y: 0.0, z: -(p.y),
+                        type: '广播',
+                        tts_text: p.tts_text || ""
+                    }))
+                };
+
+                const baseMapName = cleanId.replace(/[-_]task$/, '');
+
+                const actualMapName = data.map_name || (baseMapName + '.pcd');
+                window.currentSelectedMap = actualMapName;
+
+                const selectBox = document.getElementById('editor-map-select');
+                if (selectBox) selectBox.value = actualMapName;
+
+                const nameInput = document.getElementById('edit-task-name');
+                if (nameInput) nameInput.value = data.name || cleanId;
+
+                window.loadMapToContainer(actualMapName, 'map-interaction-area');
+
+                window.renderSubTaskList();
+
+            } catch (err) {
+                console.error("加载任务数据失败:", err);
+            }
+        };
+
+        window.resetEditor = () => {
+            window.editingTask = { id: null, name: '', points: [] };
+            window.taskOperationMode = 'mark';
+            window.selectedPointIndices = [];
+
+            const modeSelect = document.getElementById('edit-task-operation-mode');
+            if (modeSelect) {
+                modeSelect.value = 'mark';
+            }
+            window.renderSubTaskList();
+            if (window.scene) {
+                const toRemove = [];
+                window.scene.traverse((obj) => {
+                    if ((obj.userData && obj.userData.isMarker) || obj.name === 'task-marker') {
+                        toRemove.push(obj);
+                    }
+                });
+
+                toRemove.forEach(obj => {
+                    window.scene.remove(obj);
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                        else obj.material.dispose();
+                    }
+                });
+            }
+            console.log("编辑器已彻底清场，并已重置为默认标点模式");
+        };
+
+        window.editorMode = 'new';
+        window.openEditor = async (taskId) => {
+            window.resetEditor();
+            window.toggleChatWindow(false);
+            window.reparentRenderer('map-interaction-area');
+            document.getElementById('task-list-view').style.display = 'none';
+            document.getElementById('task-editor-view').style.display = 'block';
+
+            const selectBox = document.getElementById('editor-map-select');
+            const nameInput = document.getElementById('edit-task-name');
+
+            if (!taskId) {
+                window.editorMode = 'new';
+                if (nameInput) nameInput.value = '';
+                if (selectBox) {
+                    selectBox.value = '';
+                    selectBox.disabled = false;
+                }
+                console.log("进入新增任务模式");
+                return;
+            }
+
+            window.editorMode = 'edit';
+            if (selectBox) {
+                selectBox.disabled = true;
+            }
+            await window.loadTaskForMap(taskId);
+        };
+
+        window.closeEditor = () => {
+            document.getElementById('task-editor-view').style.display = 'none';
+            document.getElementById('task-list-view').style.display = 'block';
+            window.loadTaskDashboard();
+            window.toggleChatWindow(true);
+        };
+
+        document.getElementById('map-interaction-area').addEventListener('click', (e) => {
+            window.updateMapResolution();
+            const rect = e.currentTarget.getBoundingClientRect();
+            camera.aspect = rect.width / rect.height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(rect.width, rect.height);
+            const mouse = new THREE.Vector2();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+
+            if (window.taskOperationMode === 'select') {
+                const markers = scene.children.filter(obj => obj.name === 'task-marker');
+                const intersects = raycaster.intersectObjects(markers, false);
+
+                if (intersects.length > 0) {
+                    const clickedIndex = intersects[0].object.userData.index;
+                    const lastIndex = window.selectedPointIndices.length > 0
+                        ? window.selectedPointIndices[window.selectedPointIndices.length - 1]
+                        : -1;
+
+                    if (clickedIndex !== lastIndex) {
+                        window.selectedPointIndices.push({
+                            index: clickedIndex,
+                            action: 'none',
+                            tts_content: ''
+                        });
+                        window.renderSubTaskList();
+                        window.renderMarkersForTask();
+                    } else {
+                        console.log("该点已是当前路径的最后一步，无需重复添加");
+                    }
+                }
+            } else {
+                raycaster.params.Points.threshold = 0.5;
+                const pointsObj = scene.children.find(obj => obj.type === 'Points');
+
+                if (pointsObj) {
+                    const intersects = raycaster.intersectObject(pointsObj);
+                    if (intersects.length > 0) {
+                        const p = intersects[0].point;
+                        const newPoint = { x: p.x, y: p.y, z: p.z, type: '广播', tts_text: p.tts_text || ""};
+                        window.editingTask.points.push(newPoint);
+                        window.editingPointId = newPoint.id;
+
+                        window.renderSubTaskList();
+                        window.renderMarkersForTask();
+                    } else {
+                        console.warn("点击位置没有点云数据");
+                    }
+                }
+            }
+        });
+
+        window.deletePoint = (index) => {
+            window.editingTask.points.splice(index, 1);
+
+            if (window.editingPointId === index) {
+                window.editingPointId = null;
+            }
+
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        };
+
+        window.removeSelectedPoint = (orderIndex) => {
+            window.selectedPointIndices.splice(orderIndex, 1);
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        };
+
+        window.updatePointTTS = (arrIndex, content) => {
+            if (window.selectedPointIndices[arrIndex]) {
+                window.selectedPointIndices[arrIndex].tts_content = content;
+                console.log(`点位 ${arrIndex + 1} 的 TTS 内容已更新为: ${content}`);
+            }
+        };
+
+        window.renderSubTaskList = () => {
+            const list = document.getElementById('sub-task-list');
+
+            // 1. 选点模式 (Selection Mode)
+            if (window.taskOperationMode === 'select') {
+                if (!window.selectedPointIndices || window.selectedPointIndices.length === 0) {
+                    list.innerHTML = `<div style="text-align:center; padding:20px; color:#555; font-size:12px;">请在右侧地图上点击现有标点<br>规划任务路线</div>`;
+                    return;
+                }
+
+                list.innerHTML = window.selectedPointIndices.map((item, orderIndex) => {
+                    const action = item.action || 'none';
+                    const isBroadcast = (action === '广播');
+
+                    return `
+                        <div class="point-row" style="display:flex; flex-direction:column; gap:8px; padding:8px 0; border-bottom:1px solid #333;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <div class="point-index" style="background:#e91e63; color:white; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px;">
+                                    ${orderIndex + 1}
+                                </div>
+                                <div style="flex-grow:1; font-size:14px;">
+                                    前往 ➔ 标点 <b>#${item.index + 1}</b>
+                                </div>
+                                <select onchange="window.updatePointAction(${orderIndex}, this.value)" style="background:#222; color:white; border:1px solid #444; border-radius:4px; padding:2px;">
+                                    <option value="none" ${action === 'none' ? 'selected' : ''}>无动作</option>
+                                    <option value="广播" ${action === '广播' ? 'selected' : ''}>广播</option>
+                                    <option value="抓取" ${action === '抓取' ? 'selected' : ''}>抓取</option>
+                                    <option value="拍照" ${action === '拍照' ? 'selected' : ''}>拍照</option>
+                                </select>
+                                <button class="btn-sm" style="color:#f44336; background:rgba(255,255,255,0.1); border:none; cursor:pointer;" onclick="removeSelectedPoint(${orderIndex})">移除</button>
+                            </div>
+                            ${isBroadcast ? `
+                                <input type="text" placeholder="输入广播 TTS 内容..."
+                                       value="${item.tts_content || ''}"
+                                       onchange="window.updatePointTTS(${orderIndex}, this.value)"
+                                       style="width: 100%; background:#111; color:#fff; border:1px solid #555; padding:4px; border-radius:4px; font-size:12px; margin-top:4px;">
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+                return;
+            }
+
+            // 2. 原有的编辑模式 (Editing Mode)
+            if (!window.editingTask || !window.editingTask.points || window.editingTask.points.length === 0) {
+                list.innerHTML = `<div style="text-align:center; padding:20px; color:#555; font-size:12px;">暂无路径点，请点击地图添加</div>`;
+                return;
+            }
+
+            list.innerHTML = window.editingTask.points.map((p, i) => {
+                const x = Number(p.x).toFixed(2);
+                const z = Number(p.z).toFixed(2);
+
+                if (window.editingPointId === i) {
+                    return `
+                        <div class="point-row" style="border-color: var(--accent-color); flex-direction: column; align-items: flex-start;">
+                            <div style="display: flex; width: 100%; align-items: center; gap: 8px;">
+                                <div class="point-index">${i + 1}</div>
+                                <select onchange="updatePointField(${i}, 'type', this.value)" style="flex-grow:1;">
+                                    <option value="抓取" ${p.type === '抓取' ? 'selected' : ''}>抓取</option>
+                                    <option value="广播" ${p.type === '广播' ? 'selected' : ''}>广播</option>
+                                    <option value="拍照" ${p.type === '拍照' ? 'selected' : ''}>拍照</option>
+                                </select>
+                                <button class="btn-sm" style="background:#4caf50; color:white;"
+                                        onclick="window.editingPointId = null; renderSubTaskList()">完成</button>
+                            </div>
+                            ${p.type === '广播' ? `
+                                <input type="text" placeholder="输入要广播的内容..." value="${p.tts_text || ''}"
+                                       onchange="updatePointField(${i}, 'tts_text', this.value)"
+                                       style="width: 100%; margin-top: 8px; background: #222; border: 1px solid #444; color: white; padding: 4px;">
+                            ` : ''}
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="point-row">
+                            <div class="point-index" style="background:#444;">${i + 1}</div>
+                            <div style="flex-grow:1; font-size:14px;">
+                                ${p.type}
+                                ${p.type === '广播' ? `(内容: ${(p.tts_text && p.tts_text.length > 8) ? p.tts_text.substring(0, 8) + '...' : (p.tts_text || '无')})` : ''}
+                            </div>
+                            <span class="point-coord">${x}, ${z}</span>
+                            <button class="btn-sm" onclick="window.editingPointId = ${i}; renderSubTaskList()">修改</button>
+                            <button class="btn-sm" style="color:#f44336;" onclick="deletePoint(${i})">删除</button>
+                        </div>
+                    `;
+                }
+            }).join('');
+        };
+
+        window.saveTask = () => {
+            const taskName = document.getElementById('edit-task-name').value || "未命名任务";
+
+            if (window.taskOperationMode === 'select') {
+                if (window.selectedPointIndices.length === 0) {
+                    alert("请至少选择一个点位");
+                    return;
+                }
+
+                const payload = {
+                    name: taskName,
+                    map_name: window.currentSelectedMap,
+                    mode: "selection",
+                    points_config: window.selectedPointIndices
+                };
+                socket.emit('save_task_by_map', payload);
+                alert("选点路径任务 [" + taskName + "] 保存成功");
+
+            } else {
+                window.editingTask.type = document.getElementById('edit-task-type').value;
+
+                const index = window.allTasks.findIndex(t => t.id === window.editingTask.id);
+                if(index > -1) window.allTasks[index] = window.editingTask;
+                else window.allTasks.push(window.editingTask);
+
+                const payload = {
+                    name: taskName,
+                    map_name: window.currentSelectedMap,
+                    count: window.editingTask.points.length,
+                    points: window.editingTask.points.map(p => ({
+                        mode: 1,
+                        q_w: 1.0, q_x: 0.0, q_y: 0.0, q_z: 0.0,
+                        speed: 0.4,
+                        tts_text: p.tts_text,
+                        x: p.x,
+                        y: -(p.z),
+                        z: 0.0,
+                    }))
+                };
+
+                socket.emit('save_task_by_map', payload);
+                alert("常规标点任务 [" + taskName + "] 保存成功");
+            }
+
+            window.closeEditor();
+        };
+
+        window.deleteTask = (fileId) => {
+            if (!fileId) {
+                alert("删除失败：未指定任务ID");
+                return;
+            }
+
+            if (!confirm(`确定要彻底删除任务 [${fileId}] 吗？此操作将永久删除文件！`)) {
+                return;
+            }
+
+            socket.emit('delete_task', {
+                name: fileId
+            });
+
+            alert("任务已删除");
+            if (typeof window.closeEditor === 'function') {
+                window.closeEditor();
+            }
+            window.loadTaskDashboard();
+        };
+
+        window.handleMapChange = (mapName) => {
+            if (!mapName) {
+                window.resetEditor();
+                return;
+            }
+            window.resetEditor();
+            window.currentSelectedMap = mapName;
+            loadMapToContainer(mapName, 'map-interaction-area');
+
+            if (window.editorMode === 'edit') {
+                window.loadTaskForMap(mapName);
+            } else {
+                console.log("新增模式：仅加载地图底图，跳过任务数据加载");
+            }
+        };
+
+        // 2. 状态管理
+        window.editingTask = { points: [] };
+
+        // 3. 当点击地图添加点时，发送到前端内存并即时渲染
+        window.savePointToMemory = (x, y, z, type) => {
+            const newPoint = { x, y, z, type, id: Date.now() };
+            window.editingTask.points.push(newPoint);
+            window.renderSubTaskList();     // 渲染左侧列表
+            window.renderMarkersForTask();  // 渲染 3D 标点
+        };
+
+        // 5. 监听后端加载数据
+        socket.on('task_data', (data) => {
+            console.log("收到任务数据:", data);
+            window.editingTask.points = [];
+            if (data.points) {
+                window.editingTask.points = data.points.map(p => ({
+                    id: Date.now() + Math.random(),
+                    x: p.x,
+                    y: 0.0, // 固定高度
+                    z: -(p.y), // 对应后端的 y
+                    type: "广播",
+                    tts_text: p.tts_text || ""
+                }));
+            }
+
+            // 触发重绘
+            window.renderSubTaskList();
+            window.renderMarkersForTask();
+        });
+
+        window.pendingStartTask = null;
+        window.currentRunningMode = null;
+
+        window.handleTaskAction = (action, fileId) => {
+            const cleanMapName = fileId.replace(/\.pcd$/, '').replace(/\.json$/, '').replace(/[-_]task$/, '');
+
+            if (action === 'start_task') {
+                window.pendingStartTask = { fileId, cleanMapName };
+                document.getElementById('task-start-modal').style.display = 'flex';
+                return;
+            }
+
+            // 如果是其他动作，正常发送指令
+            socket.emit('task_control', {
+                action: action,
+                fileId: fileId,
+                mapName: cleanMapName,
+                mode: window.currentRunningMode
+            });
+
+            switch(action) {
+                case 'pause_task':
+                    window.taskState.isPaused = true;
+                    break;
+                case 'resume_task':
+                    window.taskState.isPaused = false;
+                    break;
+                case 'stop_task':
+                    if (confirm("确定要终止该任务吗？")) {
+                        window.taskState = { fileId: null, isRunning: false, isPaused: false };
+                        window.currentRunningMode = null;
+                    } else {
+                        return;
+                    }
+                    break;
+            }
+
+            console.log(`[调试] 执行动作: ${action}, 当前状态:`, window.taskState);
+            window.loadTaskDashboard();
+        };
+
+        window.selectAndStartTask = (mode) => {
+            if (!window.pendingStartTask) return;
+
+            const { fileId, cleanMapName } = window.pendingStartTask;
+
+            // 记录全局模式
+            window.currentRunningMode = mode;
+
+            // 发送真正的启动指令
+            socket.emit('task_control', {
+                action: 'start_task',
+                fileId: fileId,
+                mapName: cleanMapName,
+                mode: mode
+            });
+
+            window.taskState = { fileId: fileId, isRunning: true, isPaused: false };
+            document.getElementById('task-start-modal').style.display = 'none';
+
+            console.log(`[任务启动] 模式: ${mode}, 任务: ${fileId}`);
+            window.loadTaskDashboard();
+        };
+
+        // ═══════════════════════════════════════════════════════════
+        //  全局状态
+        // ═══════════════════════════════════════════════════════════
+        window.ws = null;
+        window.playTestTTS = playTestTTS;
+        document.addEventListener('DOMContentLoaded', () => {
+            window.loadTaskDashboard();
+        });
+    </script>
+</body>
+</html>
