@@ -1,6 +1,7 @@
 # Python 快取
 __pycache__/
 *.pyc
+*.swp
 
 # ROS/ROS2 編譯產物
 build/
